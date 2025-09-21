@@ -1,19 +1,13 @@
 
 ---
-title: "Malaysian Car Registration Analysis"
-<!-- output: html_document -->
+title: "Malaysia Total Industry Volume (Vehicle Registrations)"
 output: flexdashboard::flex_dashboard
-orientation: columns
-vertical_layout: fill
+<!-- vertical_layout: fill -->
 ---
 
-# Analysis of Malaysian Vehicle Registrations
+<!-- # Malaysia Total Industry Volume (Vehicle Registrations) -->
 
-This report provides an overview of vehicle registration trends in Malaysia, using open data from `data.gov.my`. The analysis covers Year-to-Date, Year-over-Year, and Month-over-Month performance.
-
-## Overall Market Summary Table
-
-Here is a detailed summary of registrations by make. You can sort and filter the table to explore the data.
+This report provides an overview of vehicle registration trends in Malaysia, using JPJ data from `data.gov.my`.
 
 ```{r setup, include=FALSE}
 library(tidyverse)
@@ -92,14 +86,15 @@ summary_data <- month_current_count |>
   ) |>
   arrange(desc(count_current)) |>
   mutate(rank = row_number()) |>
-  select(rank, maker, classification, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY,
+  select(rank, maker, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY,
          count_ytd_current, count_ytd_previous, growth_YTD)
   
-
 print(latest_date)
 ```
 
-### Column {data-width=700}
+Column
+------------------
+### **Monthly Vehicles Registrations by Make**
 ```{r, echo=FALSE, message=FALSE}
 month_current_name <- format(month_current, "%b-%Y")
 month_previous_name <- format(month_previous, "%b-%Y")
@@ -110,6 +105,8 @@ year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
 # create a copy for the table to rename columns
 table_display <- summary_data |>
     rename(
+      `Rank` := rank,
+      `Make` := maker,
       !!month_current_name := count_current,
       !!month_previous_name := count_previous,
       `Growth (MoM)` := growth_MoM,
@@ -124,7 +121,7 @@ table_display <- summary_data |>
 datatable(table_display,
           rownames = FALSE,
           filter = 'top',
-          caption = 'Monthly Vehicles Registrations by Make',
+          # caption = 'Monthly Vehicles Registrations by Make',
           options = list(pageLength = 100, order = list(0, 'asc')),
           class = 'cell-border stripe') |>
   formatPercentage("Growth (MoM)", 1) |>
@@ -135,11 +132,13 @@ datatable(table_display,
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
 
-### Column {data-width=300}
+Column
+------------------
+### **Monthly Trends for Top Brands** 
 ```{r, echo=FALSE, message=FALSE}
-# --- Identify the top 5 brands from your YTD summary ---
+# --- Identify the top brands from your YTD summary ---
 top_brands <- summary_data %>%
-  slice_head(n = 6) %>%
+  slice_head(n = 10) %>%
   pull(maker)
 
 # --- Prepare data for the time series plot ---
@@ -147,23 +146,29 @@ top_brands <- summary_data %>%
 monthly_trends_data <- car_data |>
   filter(maker %in% top_brands) |>
   mutate(month = date_reg) |>
-  count(month, maker, name = "registrations")
+  count(month, maker, name = "registration")
 
 # --- Create the plot ---
-trend_plot <- ggplot(monthly_trends_data, aes(x = month, y = registrations, color = maker)) +
+trend_plot <- ggplot(monthly_trends_data, aes(x = month, y = registration, color = maker)) +
   geom_line(linewidth = 0.5) +
   geom_point(size = 1.5) +
   labs(
-    title = "Monthly Registration Trends for Top 5 Brands",
-    subtitle = "Hover over points for details",
+    title = NULL,
     x = "Month",
-    y = "Number of Registrations",
-    color = "Brand"
+    y = "Registration",
+    color = NULL
   ) +
   theme_minimal(base_size = 14) +
-  scale_y_continuous(labels = scales::comma) # Format y-axis numbers
+  scale_y_continuous(labels = scales::comma)  # Put legend at the top
 
 # --- Convert the ggplot object to an interactive plotly chart ---
-ggplotly(trend_plot)
+ggplotly(trend_plot) |>
+    layout(legend = list(
+      # orientation = "h",
+      # xanchor = "center",
+      # x = 0.5,
+      y = 0.5,
+      font = list(size = 12)
+    ))
 ```
 
