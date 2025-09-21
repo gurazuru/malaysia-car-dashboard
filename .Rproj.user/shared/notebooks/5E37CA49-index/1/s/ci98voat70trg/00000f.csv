@@ -1,0 +1,10 @@
+"0","
+# create a copy for the table to rename columns
+table_display <- summary_data
+colnames(table_display)[4] <- month_current_name
+colnames(table_display)[5] <- month_previous_name
+colnames(table_display)[6] <- ""Growth (MoM)""
+colnames(table_display)[7] <- month_previous_year_name
+"
+"2","Error: object 'month_previous_year_name' not found
+"

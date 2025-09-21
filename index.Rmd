@@ -1,0 +1,169 @@
+
+---
+title: "Malaysian Car Registration Analysis"
+<!-- output: html_document -->
+output: flexdashboard::flex_dashboard
+orientation: columns
+vertical_layout: fill
+---
+
+# Analysis of Malaysian Vehicle Registrations
+
+This report provides an overview of vehicle registration trends in Malaysia, using open data from `data.gov.my`. The analysis covers Year-to-Date, Year-over-Year, and Month-over-Month performance.
+
+## Overall Market Summary Table
+
+Here is a detailed summary of registrations by make. You can sort and filter the table to explore the data.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(DT)
+library(ggplot2)
+library(plotly)
+
+url2025 <- "https://storage.data.gov.my/transportation/cars_2025.csv"
+url2024 <- "https://storage.data.gov.my/transportation/cars_2024.csv"
+
+car_data_2025 <- read_csv(url2025)
+car_data_2024 <- read_csv(url2024)
+
+car_data <- bind_rows(car_data_2024, car_data_2025)
+
+head(car_data)
+
+# Makes all dates to use 1st day of the month only.
+car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month"))
+
+# --- Find the most recent two full months ---
+# (Ensures the code always uses the latest data)
+latest_date <- max(car_data$date_reg)
+
+year_current <- year(latest_date)
+ytd_current_start <- ymd(paste0(year_current, "-01,-01"))
+ytd_current_end <- latest_date
+
+ytd_previous_start <- ytd_current_start %m-% years(1)
+ytd_previous_end <- ytd_current_end %m-% years(1)
+
+month_current <- latest_date
+month_previous <- month_current %m-% months(1)
+month_previous_year <- month_current %m-% months(12)
+
+# --- Calculate counts for each month and YTD ---
+month_current_count <- car_data |>
+  filter(date_reg == month_current) |>
+  count(maker, name = "count_current")
+
+month_previous_count <- car_data |>
+  filter(date_reg == month_previous) |>
+  count(maker, name = "count_previous")
+
+month_previous_year_count <- car_data |>
+  filter(date_reg == month_previous_year) |>
+  count(maker, name = "count_previous_year")
+
+ytd_current_count <- car_data |>
+    filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
+    count(maker, name = "count_ytd_current")
+
+ytd_previous_count <- car_data |>
+    filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
+    count(maker, name = "count_ytd_previous")
+
+# --- Join and calculate MoM growth ---
+summary_data <- month_current_count |>
+  full_join(month_previous_count, by = 'maker') |>
+  full_join(month_previous_year_count, by = "maker") |>
+  full_join(ytd_current_count, by = "maker") |>
+  full_join(ytd_previous_count, by = "maker") |>
+  mutate(
+    count_current = replace_na(count_current, 0),
+    count_previous = replace_na(count_previous, 0),
+    count_previous_year = replace_na(count_previous_year, 0),
+    count_ytd_current = replace_na(count_ytd_current, 0),
+    count_ytd_previous = replace_na(count_ytd_previous, 0)
+  ) |>
+  mutate(
+    growth_MoM = if_else(count_previous > 0, ((count_current/count_previous)-1), NA_real_),
+    growth_YoY = if_else(count_previous_year > 0, ((count_current/count_previous_year)-1), NA_real_),
+    growth_YTD = if_else(count_ytd_previous > 0, ((count_ytd_current/count_ytd_previous)-1), NA_real_),
+    classification = case_when( maker %in% c("Perodua", "Proton") ~ "National", TRUE ~ "Non-National")
+  ) |>
+  arrange(desc(count_current)) |>
+  mutate(rank = row_number()) |>
+  select(rank, maker, classification, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY,
+         count_ytd_current, count_ytd_previous, growth_YTD)
+  
+
+print(latest_date)
+```
+
+### Column {data-width=700}
+```{r, echo=FALSE, message=FALSE}
+month_current_name <- format(month_current, "%b-%Y")
+month_previous_name <- format(month_previous, "%b-%Y")
+month_previous_year_name <- format(month_previous_year, "%b-%Y")
+year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
+year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
+
+# create a copy for the table to rename columns
+table_display <- summary_data |>
+    rename(
+      !!month_current_name := count_current,
+      !!month_previous_name := count_previous,
+      `Growth (MoM)` := growth_MoM,
+      !!month_previous_year_name := count_previous_year,
+      `Growth (YoY)` := growth_YoY,
+      !!year_current_name := count_ytd_current,
+      !!year_previous_name := count_ytd_previous,
+      `Growth (YTD)` := growth_YTD
+    )
+
+# --- Create an interactive data table ---
+datatable(table_display,
+          rownames = FALSE,
+          filter = 'top',
+          caption = 'Monthly Vehicles Registrations by Make',
+          options = list(pageLength = 100, order = list(0, 'asc')),
+          class = 'cell-border stripe') |>
+  formatPercentage("Growth (MoM)", 1) |>
+  formatPercentage("Growth (YoY)", 1) |>
+  formatPercentage("Growth (YTD)", 1) |>
+  formatStyle("Growth (MoM)", color = styleInterval(c(0), c('red', 'green'))) |>
+  formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
+  formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
+```
+
+### Column {data-width=300}
+```{r, echo=FALSE, message=FALSE}
+# --- Identify the top 5 brands from your YTD summary ---
+top_brands <- summary_data %>%
+  slice_head(n = 6) %>%
+  pull(maker)
+
+# --- Prepare data for the time series plot ---
+# Filter main data for top brands & count registrations by month
+monthly_trends_data <- car_data |>
+  filter(maker %in% top_brands) |>
+  mutate(month = date_reg) |>
+  count(month, maker, name = "registrations")
+
+# --- Create the plot ---
+trend_plot <- ggplot(monthly_trends_data, aes(x = month, y = registrations, color = maker)) +
+  geom_line(linewidth = 0.5) +
+  geom_point(size = 1.5) +
+  labs(
+    title = "Monthly Registration Trends for Top 5 Brands",
+    subtitle = "Hover over points for details",
+    x = "Month",
+    y = "Number of Registrations",
+    color = "Brand"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_y_continuous(labels = scales::comma) # Format y-axis numbers
+
+# --- Convert the ggplot object to an interactive plotly chart ---
+ggplotly(trend_plot)
+```
+
