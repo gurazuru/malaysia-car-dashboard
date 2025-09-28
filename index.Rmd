@@ -38,7 +38,7 @@ car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month"))
 head(car_data)
 ```
 
-```{r setup, include=FALSE}
+```{r, include=FALSE}
 
 # --- Find the most recent two full months ---
 # (Ensures the code always uses the latest data)
