@@ -1,7 +1,10 @@
 ---
 title: "Malaysia Total Industry Volume (Vehicle Registrations)"
-output: flexdashboard::flex_dashboard
-<!-- vertical_layout: fill -->
+output:  
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    # social: menu
+    # source_code: embed
 ---
 
 <!-- # Malaysia Total Industry Volume (Vehicle Registrations) -->
@@ -29,12 +32,13 @@ car_data_2021 <- read_csv(url2021)
 
 car_data <- bind_rows(car_data_2021, car_data_2022, car_data_2023, car_data_2024, car_data_2025)
 
+# Makes all dates to use 1st day of the month only.
+car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month"))
+
 head(car_data)
 ```
 
 ```{r setup, include=FALSE}
-# Makes all dates to use 1st day of the month only.
-car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month"))
 
 # --- Find the most recent two full months ---
 # (Ensures the code always uses the latest data)
@@ -105,8 +109,11 @@ summary_data <- month_current_count |>
   
 print(latest_date)
 ```
+by Make
+=======================================================================
 
-## by Make
+Column
+-----------------------------------------------------------------------
 ### **Monthly Vehicles Registrations by Make**
 
 ```{r, echo=FALSE, message=FALSE}
@@ -139,7 +146,10 @@ datatable(table_display,
   formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
-### **Monthly Trends for Top Brands**
+
+Column
+-----------------------------------------------------------------------
+### **Monthly Vehicles Registrations by Make**
 
 ```{r, echo=FALSE, message=FALSE}
 # --- Identify the top brands from your YTD summary ---
@@ -222,8 +232,11 @@ summary_data_fuel <- month_current_count_fuel |>
   mutate(rank = row_number()) |>
   select(rank, fuel, count_current_fuel, count_previous_fuel, growth_MoM_fuel, count_previous_year_fuel, growth_YoY_fuel, count_ytd_current_fuel, count_ytd_previous_fuel, growth_YTD_fuel)
 ```
+by Fuel Type
+=======================================================================
 
-## by Fuel Type
+Column
+-----------------------------------------------------------------------
 ### **Monthly Vehicle Registrations by Fuel Type**
 
 ```{r, echo=FALSE, message=FALSE}
@@ -257,6 +270,8 @@ datatable(table_display_fuel,
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
 
+Column
+-----------------------------------------------------------------------
 ### **Monthly Trends by Fuel Type**
 
 ```{r, echo=FALSE, message=FALSE}
