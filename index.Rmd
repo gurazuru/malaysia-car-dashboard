@@ -18,14 +18,22 @@ library(plotly)
 
 url2025 <- "https://storage.data.gov.my/transportation/cars_2025.csv"
 url2024 <- "https://storage.data.gov.my/transportation/cars_2024.csv"
+url2023 <- "https://storage.data.gov.my/transportation/cars_2023.csv"
+url2022 <- "https://storage.data.gov.my/transportation/cars_2022.csv"
+url2021 <- "https://storage.data.gov.my/transportation/cars_2021.csv"
 
 car_data_2025 <- read_csv(url2025)
 car_data_2024 <- read_csv(url2024)
+car_data_2023 <- read_csv(url2023)
+car_data_2022 <- read_csv(url2022)
+car_data_2021 <- read_csv(url2021)
 
-car_data <- bind_rows(car_data_2024, car_data_2025)
+car_data <- bind_rows(car_data_2021, car_data_2022, car_data_2023, car_data_2024, car_data_2025)
 
 head(car_data)
+```
 
+```{r setup, include=FALSE}
 # Makes all dates to use 1st day of the month only.
 car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month"))
 
@@ -43,6 +51,13 @@ ytd_previous_end <- ytd_current_end %m-% years(1)
 month_current <- latest_date
 month_previous <- month_current %m-% months(1)
 month_previous_year <- month_current %m-% months(12)
+
+# Define all the relevant dates.
+month_current_name <- format(month_current, "%b-%Y")
+month_previous_name <- format(month_previous, "%b-%Y")
+month_previous_year_name <- format(month_previous_year, "%b-%Y")
+year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
+year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
 
 # --- Calculate counts for each month and YTD ---
 month_current_count <- car_data |>
@@ -96,12 +111,6 @@ Column
 ------------------
 ### **Monthly Vehicles Registrations by Make**
 ```{r, echo=FALSE, message=FALSE}
-month_current_name <- format(month_current, "%b-%Y")
-month_previous_name <- format(month_previous, "%b-%Y")
-month_previous_year_name <- format(month_previous_year, "%b-%Y")
-year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
-year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
-
 # create a copy for the table to rename columns
 table_display <- summary_data |>
     rename(
@@ -172,3 +181,124 @@ ggplotly(trend_plot) |>
     ))
 ```
 
+Column
+------------------
+```{r, echo=FALSE, message=FALSE}
+# --- Calculate counts for each month and YTD for fuel type ---
+month_current_count_fuel <- car_data |>
+  filter(date_reg == month_current) |>
+  count(fuel, name = "count_current_fuel")
+
+month_previous_count_fuel <- car_data |>
+  filter(date_reg == month_previous) |>
+  count(fuel, name = "count_previous_fuel")
+
+month_previous_year_count_fuel <- car_data |>
+  filter(date_reg == month_previous_year) |>
+  count(fuel, name = "count_previous_year_fuel")
+
+ytd_current_count_fuel <- car_data |>
+    filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
+    count(fuel, name = "count_ytd_current_fuel")
+
+ytd_previous_count_fuel <- car_data |>
+    filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
+    count(fuel, name = "count_ytd_previous_fuel")
+
+# --- Join and calculate MoM growth for fuel type ---
+summary_data_fuel <- month_current_count_fuel |>
+  full_join(month_previous_count_fuel, by = 'fuel') |>
+  full_join(month_previous_year_count_fuel, by = "fuel") |>
+  full_join(ytd_current_count_fuel, by = "fuel") |>
+  full_join(ytd_previous_count_fuel, by = "fuel") |>
+  mutate(
+    count_current_fuel = replace_na(count_current_fuel, 0),
+    count_previous_fuel = replace_na(count_previous_fuel, 0),
+    count_previous_year_fuel = replace_na(count_previous_year_fuel, 0),
+    count_ytd_current_fuel = replace_na(count_ytd_current_fuel, 0),
+    count_ytd_previous_fuel = replace_na(count_ytd_previous_fuel, 0)
+  ) |>
+  mutate(
+    growth_MoM_fuel = if_else(count_previous_fuel > 0, ((count_current_fuel/count_previous_fuel)-1), NA_real_),
+    growth_YoY_fuel = if_else(count_previous_year_fuel > 0, ((count_current_fuel/count_previous_year_fuel)-1), NA_real_),
+    growth_YTD_fuel = if_else(count_ytd_previous_fuel > 0, ((count_ytd_current_fuel/count_ytd_previous_fuel)-1), NA_real_) 
+  ) |>
+  arrange(desc(count_current_fuel)) |>
+  mutate(rank = row_number()) |>
+  select(rank, fuel, count_current_fuel, count_previous_fuel, growth_MoM_fuel, count_previous_year_fuel, growth_YoY_fuel, count_ytd_current_fuel, count_ytd_previous_fuel, growth_YTD_fuel)
+```
+
+Column
+------------------
+### **Monthly Trends for Top Brands** 
+```{r, echo=FALSE, message=FALSE}
+# create a copy for the table to rename columns
+table_display_fuel <- summary_data_fuel |>
+    rename(
+      `Rank` := rank,
+      `Fuel Type` := fuel,
+      !!month_current_name := count_current_fuel,
+      !!month_previous_name := count_previous_fuel,
+      `Growth (MoM)` := growth_MoM_fuel,
+      !!month_previous_year_name := count_previous_year_fuel,
+      `Growth (YoY)` := growth_YoY_fuel,
+      !!year_current_name := count_ytd_current_fuel,
+      !!year_previous_name := count_ytd_previous_fuel,
+      `Growth (YTD)` := growth_YTD_fuel
+    )
+
+# --- Create an interactive data table ---
+datatable(table_display_fuel,
+          rownames = FALSE,
+          filter = 'top',
+          # caption = 'Monthly Vehicles Registrations by Fuel Type',
+          options = list(pageLength = 100, order = list(0, 'asc')),
+          class = 'cell-border stripe') |>
+  formatPercentage("Growth (MoM)", 1) |>
+  formatPercentage("Growth (YoY)", 1) |>
+  formatPercentage("Growth (YTD)", 1) |>
+  formatStyle("Growth (MoM)", color = styleInterval(c(0), c('red', 'green'))) |>
+  formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
+  formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
+```
+
+Column
+------------------
+### **Monthly Trends by Fuel Type** 
+```{r, echo=FALSE, message=FALSE}
+# --- Prepare data for the time series plot ---
+# Filter main data for top brands & count registrations by month
+monthly_trends_data_fuel <- car_data |>
+  mutate(fuel_grouped = case_when(
+    fuel %in% c("petrol") ~ "Petrol",
+    fuel %in% c("greendiesel", "diesel") ~ "Diesel",
+    fuel %in% c("electric") ~ "BEV",
+    fuel %in% c("hybrid_petrol", "hybrid_diesel") ~ "Hybrid",
+    TRUE ~ "Others"
+  )) |>
+  mutate(month = date_reg) |>
+  count(month, fuel_grouped, name = "registration")
+
+# --- Create the plot ---
+trend_plot_fuel <- ggplot(monthly_trends_data_fuel, aes(x = month, y = registration, color = fuel_grouped)) +
+  geom_line(linewidth = 0.5) +
+  geom_point(size = 1.5) +
+  labs(
+    title = NULL,
+    x = "Month",
+    y = "Registration",
+    color = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_y_continuous(labels = scales::comma)  # Put legend at the top
+
+# --- Convert the ggplot object to an interactive plotly chart ---
+ggplotly(trend_plot_fuel) |>
+    layout(legend = list(
+      # orientation = "h",
+      # xanchor = "center",
+      # x = 0.5,
+      y = 0.5,
+      font = list(size = 12)
+    ))
+```
