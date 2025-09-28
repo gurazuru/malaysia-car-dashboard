@@ -1,4 +1,3 @@
-
 ---
 title: "Malaysia Total Industry Volume (Vehicle Registrations)"
 output: flexdashboard::flex_dashboard
@@ -107,9 +106,10 @@ summary_data <- month_current_count |>
 print(latest_date)
 ```
 
-Column
-------------------
+## Column
+
 ### **Monthly Vehicles Registrations by Make**
+
 ```{r, echo=FALSE, message=FALSE}
 # create a copy for the table to rename columns
 table_display <- summary_data |>
@@ -141,9 +141,10 @@ datatable(table_display,
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
 
-Column
-------------------
-### **Monthly Trends for Top Brands** 
+## Column
+
+### **Monthly Trends for Top Brands**
+
 ```{r, echo=FALSE, message=FALSE}
 # --- Identify the top brands from your YTD summary ---
 top_brands <- summary_data %>%
@@ -181,8 +182,8 @@ ggplotly(trend_plot) |>
     ))
 ```
 
-Column
-------------------
+## Column
+
 ```{r, echo=FALSE, message=FALSE}
 # --- Calculate counts for each month and YTD for fuel type ---
 month_current_count_fuel <- car_data |>
@@ -228,9 +229,10 @@ summary_data_fuel <- month_current_count_fuel |>
   select(rank, fuel, count_current_fuel, count_previous_fuel, growth_MoM_fuel, count_previous_year_fuel, growth_YoY_fuel, count_ytd_current_fuel, count_ytd_previous_fuel, growth_YTD_fuel)
 ```
 
-Column
-------------------
-### **Monthly Trends for Top Brands** 
+## Column
+
+### **Monthly Vehicle Registrations by Fuel Type**
+
 ```{r, echo=FALSE, message=FALSE}
 # create a copy for the table to rename columns
 table_display_fuel <- summary_data_fuel |>
@@ -262,9 +264,10 @@ datatable(table_display_fuel,
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
 
-Column
-------------------
-### **Monthly Trends by Fuel Type** 
+## Column
+
+### **Monthly Trends by Fuel Type**
+
 ```{r, echo=FALSE, message=FALSE}
 # --- Prepare data for the time series plot ---
 # Filter main data for top brands & count registrations by month
