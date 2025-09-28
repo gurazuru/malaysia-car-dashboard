@@ -106,8 +106,7 @@ summary_data <- month_current_count |>
 print(latest_date)
 ```
 
-## Column
-
+## by Make
 ### **Monthly Vehicles Registrations by Make**
 
 ```{r, echo=FALSE, message=FALSE}
@@ -140,9 +139,6 @@ datatable(table_display,
   formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
-
-## Column
-
 ### **Monthly Trends for Top Brands**
 
 ```{r, echo=FALSE, message=FALSE}
@@ -181,8 +177,6 @@ ggplotly(trend_plot) |>
       font = list(size = 12)
     ))
 ```
-
-## Column
 
 ```{r, echo=FALSE, message=FALSE}
 # --- Calculate counts for each month and YTD for fuel type ---
@@ -229,8 +223,7 @@ summary_data_fuel <- month_current_count_fuel |>
   select(rank, fuel, count_current_fuel, count_previous_fuel, growth_MoM_fuel, count_previous_year_fuel, growth_YoY_fuel, count_ytd_current_fuel, count_ytd_previous_fuel, growth_YTD_fuel)
 ```
 
-## Column
-
+## by Fuel Type
 ### **Monthly Vehicle Registrations by Fuel Type**
 
 ```{r, echo=FALSE, message=FALSE}
@@ -263,8 +256,6 @@ datatable(table_display_fuel,
   formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
   formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
 ```
-
-## Column
 
 ### **Monthly Trends by Fuel Type**
 
