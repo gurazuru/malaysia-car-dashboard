@@ -3,6 +3,7 @@ title: "Malaysia Total Industry Volume (Vehicle Registrations)"
 output:  
   flexdashboard::flex_dashboard:
     orientation: columns
+    # runtime: shiny
     # social: menu
     # source_code: embed
 ---
@@ -134,7 +135,7 @@ datatable(table_display,
 
 Column
 -----------------------------------------------------------------------
-### **Monthly Registration Trend by Make**
+### **Monthly Registration Trend for Top 10 Brands**
 
 ```{r, echo=FALSE, message=FALSE}
 # --- Identify the top brands from latest month  ---
@@ -180,30 +181,30 @@ by Model
 # --- Calculate counts for each month and YTD ---
 month_current_count_model <- car_data |>
   filter(date_reg == month_current) |>
-  count(maker, model, name = "count_current_model")
+  count(maker, model, fuel_grouped, name = "count_current_model")
 
 month_previous_count_model <- car_data |>
   filter(date_reg == month_previous) |>
-  count(maker, model, name = "count_previous_model")
+  count(maker, model, fuel_grouped, name = "count_previous_model")
 
 month_previous_year_count_model <- car_data |>
   filter(date_reg == month_previous_year) |>
-  count(maker, model, name = "count_previous_year_model")
+  count(maker, model, fuel_grouped, name = "count_previous_year_model")
 
 ytd_current_count_model <- car_data |>
     filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
-    count(maker, model, name = "count_ytd_current_model")
+    count(maker, model, fuel_grouped, name = "count_ytd_current_model")
 
 ytd_previous_count_model <- car_data |>
     filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
-    count(maker, model, name = "count_ytd_previous_model")
+    count(maker, model, fuel_grouped, name = "count_ytd_previous_model")
 
 # --- Join and calculate MoM growth ---
 summary_data_model <- month_current_count_model |>
-  full_join(month_previous_count_model, by = c("maker", "model")) |>
-  full_join(month_previous_year_count_model, by = c("maker", "model")) |>
-  full_join(ytd_current_count_model, by = c("maker", "model")) |>
-  full_join(ytd_previous_count_model, by = c("maker", "model")) |>
+  full_join(month_previous_count_model, by = c("maker", "model", "fuel_grouped")) |>
+  full_join(month_previous_year_count_model, by = c("maker", "model", "fuel_grouped")) |>
+  full_join(ytd_current_count_model, by = c("maker", "model", "fuel_grouped")) |>
+  full_join(ytd_previous_count_model, by = c("maker", "model", "fuel_grouped")) |>
   mutate(
     count_current_model = replace_na(count_current_model, 0),
     count_previous_model = replace_na(count_previous_model, 0),
@@ -218,7 +219,7 @@ summary_data_model <- month_current_count_model |>
   ) |>
   arrange(desc(count_current_model)) |>
   mutate(rank = row_number()) |>
-  select(rank, maker, model, count_current_model, count_previous_model, growth_MoM, count_previous_year_model, growth_YoY,
+  select(rank, maker, model, fuel_grouped, count_current_model, count_previous_model, growth_MoM, count_previous_year_model, growth_YoY,
          count_ytd_current_model, count_ytd_previous_model, growth_YTD)
 ```
 
@@ -233,6 +234,7 @@ table_display <- summary_data_model |>
       `Rank` := rank,
       `Make` := maker,
       `Model` := model,
+      `Fuel Type` := fuel_grouped,
       !!month_current_name := count_current_model,
       !!month_previous_name := count_previous_model,
       `Growth (MoM)` := growth_MoM,
@@ -260,7 +262,7 @@ datatable(table_display,
 
 Column
 -----------------------------------------------------------------------
-### **Monthly Registration Trend by Model**
+### **Monthly Registration Trend for Top 10 Models**
 
 ```{r, echo=FALSE, message=FALSE}
 # --- Identify the top models from latest month  ---
