@@ -4,7 +4,7 @@ library(DT)
 library(ggplot2)
 library(plotly)
 
-car_data_path <- "JPJ_Car_Viz/data/car_data.csv"
+car_data_path <- "Data/car_data.csv"
 
 url2025 <- "https://storage.data.gov.my/transportation/cars_2025.csv"
 url2024 <- "https://storage.data.gov.my/transportation/cars_2024.csv"
