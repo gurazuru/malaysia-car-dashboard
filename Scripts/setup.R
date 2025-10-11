@@ -4,6 +4,8 @@ library(DT)
 library(ggplot2)
 library(plotly)
 
+setwd("F:/Users/fis/Documents/JPJ_Car_Viz")
+
 car_data_path <- "Data/car_data.csv"
 
 url2025 <- "https://storage.data.gov.my/transportation/cars_2025.csv"
