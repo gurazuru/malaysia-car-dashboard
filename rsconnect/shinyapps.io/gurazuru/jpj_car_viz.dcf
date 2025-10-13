@@ -1,0 +1,10 @@
+name: jpj_car_viz
+title:
+username: gurazuru
+account: gurazuru
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15739625
+bundleId: 11028204
+url: https://gurazuru.shinyapps.io/jpj_car_viz/
+version: 1

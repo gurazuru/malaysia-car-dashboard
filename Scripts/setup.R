@@ -6,24 +6,19 @@ library(plotly)
 
 setwd("F:/Users/fis/Documents/JPJ_Car_Viz")
 
-car_data_path <- "Data/car_data.csv"
+# Define the years you want to pull
+years <- 2010:2025
 
-url2025 <- "https://storage.data.gov.my/transportation/cars_2025.csv"
-url2024 <- "https://storage.data.gov.my/transportation/cars_2024.csv"
-url2023 <- "https://storage.data.gov.my/transportation/cars_2023.csv"
-url2022 <- "https://storage.data.gov.my/transportation/cars_2022.csv"
-url2021 <- "https://storage.data.gov.my/transportation/cars_2021.csv"
+# Generate URLs and read CSVs
+car_data_list <- map(years, ~ read_csv(
+  paste0("https://storage.data.gov.my/transportation/cars_", .x, ".csv")
+))
 
-car_data_2025 <- read_csv(url2025)
-car_data_2024 <- read_csv(url2024)
-car_data_2023 <- read_csv(url2023)
-car_data_2022 <- read_csv(url2022)
-car_data_2021 <- read_csv(url2021)
-
-car_data <- bind_rows(car_data_2021, car_data_2022, car_data_2023, car_data_2024, car_data_2025)
+# Combine all years into one data frame
+car_data_full <- bind_rows(car_data_list)
 
 # Makes all dates to use 1st day of the month only.
-car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month")) |>
+car_data_full <- car_data_full |> mutate(date_reg = floor_date(date_reg, unit = "month")) |>
   mutate(fuel_grouped = case_when(
     fuel %in% c("petrol") ~ "Petrol",
     fuel %in% c("greendiesel", "diesel") ~ "Diesel",
@@ -32,11 +27,16 @@ car_data <- car_data |> mutate(date_reg = floor_date(date_reg, unit = "month")) 
     TRUE ~ "Others"
   )) 
 
-head(car_data)
+head(car_data_full)
 
-write_csv(car_data, car_data_path)
+car_data_path <- "data/car_data_sum.csv"
+
+car_data_sum <- car_data_full |>
+  count(date_reg, type, maker, model, fuel_grouped, name = "count")
+
+write_csv(car_data_sum, car_data_path)
 
 # --- get unique make models ---
-model_list <- car_data |>
+model_list <- car_data_sum |>
   distinct(maker, model) |>
   arrange(maker, model)
