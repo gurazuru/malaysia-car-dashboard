@@ -2,13 +2,11 @@
 # ---- Load packages ----
 library(shiny)
 library(tidyverse)
-library(lubridate)
 library(zoo)
 library(DT)
 library(plotly)
+library(forecast)
 library(bslib)
-library(dplyr)
-library(readr)
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("data/car_data_sum.csv")
@@ -26,6 +24,61 @@ fuel_grouped_list <- car_data |>
   group_by(fuel_grouped) |>
   summarise(total_count = sum(count), .groups = "drop")
 
+# ---- Key Date Variables ----
+latest_date <- max(car_data$date_reg)
+min_date <- latest_date %m-% years(5)  
+
+year_current <- year(latest_date)
+ytd_current_start <- ymd(paste0(year_current, "-01-01"))
+ytd_current_end <- latest_date
+
+ytd_previous_start <- ytd_current_start %m-% years(1)
+ytd_previous_end <- ytd_current_end %m-% years(1)
+
+month_current <- latest_date
+month_previous <- month_current %m-% months(1)
+month_previous_year <- month_current %m-% months(12)
+
+# Define all the relevant dates.
+month_current_name <- format(month_current, "%b-%Y")
+month_previous_name <- format(month_previous, "%b-%Y")
+month_previous_year_name <- format(month_previous_year, "%b-%Y")
+year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
+year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
+
+# ---- Forecasting ----
+# aggregate data to monthly data to get monthly TIV
+tiv_monthly <- car_data |>
+  group_by(date_reg = floor_date(date_reg, "month")) |>
+  summarise(TIV = sum(count, na.rm = TRUE)) |>
+  arrange(date_reg)
+
+# convert to time series object
+tiv_ts <- ts(tiv_monthly$TIV, start = c(2010, 1), frequency = 12)
+
+# auto.arima to select the best seasonal ARIMA
+fit <- auto.arima(tiv_ts, seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
+summary(fit)
+
+# forecast the upcoming 12 months and bind back to the original monthly tiv data
+forecast_12 <- forecast(fit, h = 12, level = c(70, 95))
+
+# convert to dataframe
+forecast_df <- tibble(
+  date_reg = seq(max(tiv_monthly$date_reg) %m+% months(1),
+                 by = "1 month", length.out = 12),
+  TIV = as.numeric(forecast_12$mean),
+  lower_70 = as.numeric(forecast_12$lower[, 1]),
+  upper_70 = as.numeric(forecast_12$upper[, 1]),
+  lower_95 = as.numeric(forecast_12$lower[, 2]),
+  upper_95 = as.numeric(forecast_12$upper[, 2]),
+  type = "Forecast"
+  ) 
+
+tiv_plot_df <- tiv_monthly |>
+  mutate(type = "Actual") |>
+  bind_rows(forecast_df)
+
 # ---- UI ----
 ui <- page_fluid(
   titlePanel("Malaysia Total Industry Volume (Vehicle Registrations)"),
@@ -38,21 +91,40 @@ ui <- page_fluid(
     card_header("data as of 30th September 2025"),
     DTOutput("summary_table_total")
   ),
-  card(
-    height = c(300),
-    card_header(
-      div(
-        style = "display: flex; align-items: center; justify-content: space-between;",
-        "View as: ",
-        selectInput(
-          inputId = "agg_level_ttl",
-          label = NULL,
-          choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-          selected = "Monthly"
-        )
-      ),
+  tabsetPanel(
+    id = "toptabs",
+    tabPanel("TIV",
+             layout_columns( col_widths = c(12),
+                             card(
+                               height = c(300),
+                               card_header(
+                                 div(
+                                   style = "display: flex; align-items: center; justify-content: space-between;",
+                                   "View as: ",
+                                   selectInput(
+                                     inputId = "agg_level_ttl",
+                                     label = NULL,
+                                     choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                                     selected = "Monthly"
+                                   )
+                                 ),
+                               ),
+                               plotlyOutput("trend_plot_total"),
+                             )
+              )
     ),
-        plotlyOutput("trend_plot_total"),
+    tabPanel("Forecast",
+             layout_columns( col_widths = c(12),
+                             card(
+                               height = c(300),
+                               card_header(
+                                 div(
+                                 ),
+                               ),
+                               plotlyOutput("forecast_plot_total"),
+                             )
+             )
+    )
   ),
   
   
@@ -92,18 +164,17 @@ ui <- page_fluid(
                      )
                    ) 
                  ),
-                 
                  plotlyOutput("trend_plot_make")
                )
-             )),
+              )
+             ),
     tabPanel("By Model",
              layout_columns(
                col_widths = c(12),
                 card(
                  card_header("Monthly Vehicle Registrations by Model"),
                  DTOutput("summary_table_model")
-               ),
-
+                ),     
                card(
                  card_header(
                    div(
@@ -131,8 +202,9 @@ ui <- page_fluid(
                    ) 
                  ),
                  plotlyOutput("trend_plot_model")
-               )
-             )),
+                )
+              )
+            ),
     tabPanel("By Fuel Type",
              layout_columns(
                col_widths = c(12),
@@ -156,11 +228,10 @@ ui <- page_fluid(
                      )
                    ) 
                  ),
-                 
                  plotlyOutput("trend_plot_fuel")
                ),
-               
-             ))
+              )
+             )
   ),
   actionButton("reset_selection", "Reset Selection"),
   
@@ -170,34 +241,8 @@ ui <- page_fluid(
   )
 )
 
-
-
 # ---- SERVER ----
 server <- function(input, output, session) {
-  
-  # ---- Key Date Variables ----
-  latest_date <- max(car_data$date_reg)
-  min_date <- latest_date %m-% years(5)  
-  
-  year_current <- year(latest_date)
-  ytd_current_start <- ymd(paste0(year_current, "-01-01"))
-  ytd_current_end <- latest_date
-  
-  ytd_previous_start <- ytd_current_start %m-% years(1)
-  ytd_previous_end <- ytd_current_end %m-% years(1)
-  
-  month_current <- latest_date
-  month_previous <- month_current %m-% months(1)
-  month_previous_year <- month_current %m-% months(12)
-  
-  # Define all the relevant dates.
-  month_current_name <- format(month_current, "%b-%Y")
-  month_previous_name <- format(month_previous, "%b-%Y")
-  month_previous_year_name <- format(month_previous_year, "%b-%Y")
-  year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
-  year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
-  
-  
   # ---- Summary Function ----
   make_summary <- function(data, group_col, group_col_name) {
     group_col <- sym(group_col)  # convert string to symbol for tidy evaluation
@@ -316,9 +361,7 @@ server <- function(input, output, session) {
           `Growth (YTD)` := growth_YTD,
           `Total Since 2010` := total_count
         ) 
-      
     }
-   
   }
   
   # ---- Output Data Table Functions ----
@@ -344,7 +387,7 @@ server <- function(input, output, session) {
       rownames = FALSE,
       filter = 'top',
       selection = "multiple",
-      options = list(pageLength = 10, searching = FALSE),
+      options = list(pageLength = 10),
       class = 'cell-border stripe') |>
       formatPercentage("Growth (MoM)", 1) |>
       formatPercentage("Growth (YoY)", 1) |>
@@ -414,7 +457,6 @@ server <- function(input, output, session) {
           rangeslider = list(visible = FALSE, thickness = 0.04)
         )
       ) 
-    
   }
   
   plot_chart <- function(df, group_col, group_col_name, top_n_value, agg_choice) {
@@ -489,7 +531,6 @@ server <- function(input, output, session) {
       labs(x = "Month", y = "Registration", color = NULL) +
       scale_y_continuous(labels = scales::comma)
     
-
     ggplotly(trend_plot) |>
       layout(
         xaxis = list(
@@ -498,6 +539,45 @@ server <- function(input, output, session) {
       ) 
   }
   
+  plot_chart_fc_total <- function() {
+    plot_ly() |>
+      add_lines(
+        data = tiv_monthly,
+        x = ~date_reg, y = ~TIV,
+        name = "Actual",
+        line = list(color = "black"),
+        hovertemplate = "Actual: %{y:.3~s}<extra></extra>"
+      ) |>
+      add_lines(
+        data = forecast_df,
+        x = ~date_reg, y = ~TIV,
+        name = "Forecast",
+        line = list(color = "orange", dash = "dot"),
+        hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
+      ) |>
+      add_ribbons( # This is the corrected section
+        data = forecast_df,
+        x = ~date_reg, ymin = ~lower_70, ymax = ~upper_70,
+        name = "70% CI",
+        fillcolor = 'rgba(255,165,0,0.2)', 
+        line = list(color = 'transparent'),
+        hovertemplate = "80% CI: %{y:.3~s}<extra></extra>"
+      ) |>
+      add_lines( # This is the corrected section
+        data = forecast_df,
+        x = ~date_reg, y = ~lower_70,
+        name = "70% CI",
+        line = list(color = "rgba(255,165,0,0.2)", width = 0), 
+        hovertemplate = "80% CI: %{y:.3~s}<extra></extra>"
+      ) |>
+      layout(
+        title = "TIV with 12-Month Forecast",
+        xaxis = list(title = "Month"),
+        yaxis = list(title = "Registration"),
+        hovermode = "x"
+      )
+}
+      
   # ---- Reactive summary total ----
   summary_total <- reactive({
     month_current_count_ttl <- car_data |>
@@ -521,7 +601,7 @@ server <- function(input, output, session) {
       summarise(count_ytd_previous = sum(count), .groups = "drop")
     
     # Add label column first
-    label_col <- tibble(category = "Total TIV")
+    label_col <- tibble(category = "TIV")
     
     bind_cols(
       label_col,
@@ -540,7 +620,7 @@ server <- function(input, output, session) {
       arrange(desc(count_current)) |>
       select(category, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
       rename(
-        `Total TIV` := category,
+        `Total` := category,
         !!month_current_name := count_current,
         !!month_previous_name := count_previous,
         `Growth (MoM)` := growth_MoM,
@@ -568,6 +648,7 @@ server <- function(input, output, session) {
   output$trend_plot_make <- renderPlotly(plot_chart(summary_data, maker, "Make", input$top_n, input$agg_level))
   output$trend_plot_model <- renderPlotly(plot_chart(summary_data_model, model, "Model", input$top_n_model, input$agg_level_model))
   output$trend_plot_fuel <- renderPlotly(plot_chart(summary_data_fuel, fuel_grouped, "Fuel Type", input$top_n_fuel, input$agg_level_fuel))
+  output$forecast_plot_total <- renderPlotly(plot_chart_fc_total())
   
   observeEvent(input$reset_selection, {
     if (input$tabs == "By Make") {
@@ -582,7 +663,6 @@ server <- function(input, output, session) {
       DT::selectRows(proxy, NULL)
     }
   })
-  
 }
 
 shinyApp(ui, server)
