@@ -387,7 +387,31 @@ server <- function(input, output, session) {
       rownames = FALSE,
       filter = 'top',
       selection = "multiple",
-      options = list(pageLength = 10),
+      
+      extensions = 'Buttons',
+      
+      options = list(
+        dom = '<"d-flex justify-content-between align-items-center mb-2"Bf>tip', # B = Buttons, f = filter, t = table, i/p = info/pagination
+        
+        fixedColumns = TRUE,
+        autoWidth = TRUE,
+        ordering = TRUE,
+        buttons = c('excel'),
+        
+        buttons = list(
+          list(
+            extend = "excel",
+            text = "Export to Excel",
+            title = NULL,
+            filename = "data",
+            exportOptions = list(
+              modifier = list(page = "all")
+            )
+          )# export all pages
+        ),
+        
+        pageLength = 10
+      ),
       class = 'cell-border stripe') |>
       formatPercentage("Growth (MoM)", 1) |>
       formatPercentage("Growth (YoY)", 1) |>
@@ -561,14 +585,14 @@ server <- function(input, output, session) {
         name = "70% CI",
         fillcolor = 'rgba(255,165,0,0.2)', 
         line = list(color = 'transparent'),
-        hovertemplate = "80% CI: %{y:.3~s}<extra></extra>"
+        hovertemplate = "70% CI: %{y:.3~s}<extra></extra>"
       ) |>
       add_lines( # This is the corrected section
         data = forecast_df,
         x = ~date_reg, y = ~lower_70,
         name = "70% CI",
         line = list(color = "rgba(255,165,0,0.2)", width = 0), 
-        hovertemplate = "80% CI: %{y:.3~s}<extra></extra>"
+        hovertemplate = "70% CI: %{y:.3~s}<extra></extra>"
       ) |>
       layout(
         title = "TIV with 12-Month Forecast",
@@ -639,9 +663,9 @@ server <- function(input, output, session) {
   
   # ---- Output 1: DataTable ----
   output$summary_table_total <- renderDT(data_table_TIV(summary_total))
-  output$summary_table <- renderDT(data_table(summary_data))
-  output$summary_table_model <- renderDT(data_table(summary_data_model))
-  output$summary_table_fuel <- renderDT(data_table(summary_data_fuel))
+  output$summary_table <- renderDT(data_table(summary_data), server = FALSE)
+  output$summary_table_model <- renderDT(data_table(summary_data_model), server = FALSE)
+  output$summary_table_fuel <- renderDT(data_table(summary_data_fuel), server = FALSE)
   
   # ---- Output 2: Plotly Trend ----
   output$trend_plot_total <- renderPlotly(plot_chart_total(input$agg_level_ttl))
@@ -664,5 +688,6 @@ server <- function(input, output, session) {
     }
   })
 }
+
 
 shinyApp(ui, server)
