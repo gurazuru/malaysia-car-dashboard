@@ -88,7 +88,7 @@ ui <- page_fluid(
           style = "color: #555; margin-top: -2px;"),
   card(
     height = c(160),
-    card_header("data as of 30th September 2025"),
+    card_header("data as of 31st October 2025"),
     DTOutput("summary_table_total")
   ),
   tabsetPanel(
