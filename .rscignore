@@ -1,0 +1,10 @@
+Scripts/
+.git
+.Rproj.user
+.gitignore
+*.csv
+*.xlsx
+*.rds
+*.zip
+.Rhistory
+.RData
