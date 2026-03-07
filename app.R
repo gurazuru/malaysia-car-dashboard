@@ -9,7 +9,7 @@ library(forecast)
 library(bslib)
 
 # ---- Load and combine data ----
-car_data <- readr::read_csv("data/car_data_sum.csv")
+car_data <- readr::read_csv("Data/car_data_sum.csv")
 
 # --- get unique make models ---
 model_list <- car_data |>
@@ -88,7 +88,7 @@ ui <- page_fluid(
           style = "color: #555; margin-top: -2px;"),
   card(
     height = c(160),
-    card_header("data as of 31st October 2025"),
+    card_header("data as of 31st January 2026"),
     DTOutput("summary_table_total")
   ),
   tabsetPanel(
