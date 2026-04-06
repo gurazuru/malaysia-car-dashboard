@@ -5,6 +5,10 @@ account: gurazuru
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 15739625
+<<<<<<< HEAD
 bundleId: 11801915
+=======
+bundleId: 11162527
+>>>>>>> 0bc9b8d530d59541d429acea7f3b8fbea03d62f7
 url: https://gurazuru.shinyapps.io/jpj_car_viz/
 version: 1
