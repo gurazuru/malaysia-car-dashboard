@@ -30,11 +30,15 @@ car_data_full <- car_data_full |> mutate(date_reg = floor_date(date_reg, unit = 
 head(car_data_full)
 
 car_data_path <- "Data/car_data_sum.csv"
+car_data_sample_path <- "Data/car_data_sum_sample.csv"
 
 car_data_sum <- car_data_full |>
   count(date_reg, type, maker, model, fuel_grouped, name = "count")
 
+car_data_sum_sample <- head(car_data_sum, 1000)
+
 write_csv(car_data_sum, car_data_path)
+write_csv(car_data_sum_sample, car_data_sample_path)
 
 # --- get unique make models ---
 model_list <- car_data_sum |>
