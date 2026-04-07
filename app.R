@@ -143,6 +143,14 @@ ui <- page_fluid(
     ),
     column(width = 4,
            selectInput(
+             inputId = "global_segment",
+             label = "Vehicle Segment:",
+             choices = c("All", sort(unique(car_data$segment))),
+             selected = "All"
+           )
+    ),
+    column(width = 4,
+           selectInput(
              inputId = "year_selected",
              label = "Year:",
              choices = c("2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011"),
@@ -289,7 +297,7 @@ ui <- page_fluid(
   actionButton("reset_selection", "Reset Selection"),
   
   tags$footer(
-    style = "bottom:0; right:0; width:100%; padding:5px; font-size:10px; text-align:right;",
+    style = "bottom:0; right:0; width:100%; padding:5px; font-size:12px; text-align:right;",
     HTML("Created by Nur Nafis Naim | <i>nafisnaim@gmail.com</i>")
   )
 )
@@ -297,11 +305,16 @@ ui <- page_fluid(
 # ---- SERVER ----
 server <- function(input, output, session) {
   
-  # ---- Filter by Fuel Type & Latest Year ----
+  # ---- Filter by Fuel Type, Segment, & Latest Year ----
   filtered_data <- reactive({
     df <- car_data
     if (input$global_fuel_type != "All") {
       df <- df |> filter(fuel_grouped == input$global_fuel_type)
+    }
+    
+    df <- df
+    if (input$global_segment != "All") {
+      df <- df |> filter(segment == input$global_segment)
     }
     
     df <- df |> filter(year(date_reg) %in% c(as.numeric(input$year_selected), 
