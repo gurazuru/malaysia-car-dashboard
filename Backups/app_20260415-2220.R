@@ -8,15 +8,13 @@ library(plotly)
 library(forecast)
 library(bslib)
 
-# setwd("C:/R Projects/JPJ_Car_Viz")
-data_asof = "data as of 31st March 2026" # Update latest description here
+setwd("C:/R Projects/JPJ_Car_Viz")
+data_asof = "data as of 31st March 2026"
 
 # ---- Load and combine data ----
-car_data <- readr::read_csv("Data/car_data_sum.csv") |>
-  mutate(date_reg = floor_date(date_reg, unit = "month"))
-
-# ---- Sample data ----
-# car_data <- car_data |> filter(year(date_reg) >= 2025)
+car_data <- readr::read_csv("Data/car_data_sum.csv") |> 
+  mutate(date_reg = floor_date(date_reg, unit = "month")) #|> 
+# filter(year(date_reg) == 2025)
 # car_data <- readr::read_csv("Data/car_data_sum_sample.csv")
 
 # ---- Key Date Variables ----
@@ -48,18 +46,27 @@ tiv_monthly <- car_data |>
   summarise(TIV = sum(count, na.rm = TRUE)) |>
   arrange(date_reg)
 
-# Next 12 months
-forecast_next12 <- readRDS("Data/forecast_monthly.rds")
-forecast_next12 <- forecast_next12 |>
-  filter(
-    month > max(month) %m-% months(12)
-  ) |>
-  mutate(type = "Forecast") |>
-  rename(date_reg := month, TIV := yhat)
+# convert to time series object
+tiv_ts <- ts(tiv_monthly$TIV, start = c(2010, 1), frequency = 12)
 
-forecast_nextmonth <- readRDS("Data/forecast_fd.rds")
-forecast_nextmonth <- forecast_nextmonth |>
-  rename(date_reg := Date, TIV := Forecast, TIV_Cum := Forecast_Cum)
+# auto.arima to select the best seasonal ARIMA
+fit <- auto.arima(tiv_ts, seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
+summary(fit)
+
+# forecast the upcoming 12 months and bind back to the original monthly tiv data
+forecast_12 <- forecast(fit, h = 12, level = c(70, 95))
+
+# convert to dataframe
+forecast_df <- tibble(
+  date_reg = seq(max(tiv_monthly$date_reg) %m+% months(1),
+                 by = "1 month", length.out = 12),
+  TIV = as.numeric(forecast_12$mean),
+  lower_70 = as.numeric(forecast_12$lower[, 1]),
+  upper_70 = as.numeric(forecast_12$upper[, 1]),
+  lower_95 = as.numeric(forecast_12$lower[, 2]),
+  upper_95 = as.numeric(forecast_12$upper[, 2]),
+  type = "Forecast"
+) 
 
 # limit to previous 12 months to plot
 tiv_monthly_l12m <- tiv_monthly |>
@@ -68,7 +75,7 @@ tiv_monthly_l12m <- tiv_monthly |>
 tiv_plot_df <- tiv_monthly |>
   filter(date_reg >= month_current %m-% months(11)) |>
   mutate(type = "Actual") |>
-  bind_rows(forecast_next12)
+  bind_rows(forecast_df)
 
 # ---- UI ----
 ui <- page_fluid(
@@ -87,6 +94,7 @@ ui <- page_fluid(
   tags$h5("This report provides an overview of vehicle registration trends in Malaysia, 
            using JPJ data from data.gov.my.",
           style = "color: #555; margin-top: -2px;"),
+  
   
   card(
     height = c(180),
@@ -116,7 +124,7 @@ ui <- page_fluid(
                              )
              )
     ),
-    tabPanel("12-Month Forecast",
+    tabPanel("Forecast",
              layout_columns( width = 12,
                              card(
                                height = c(280),
@@ -125,25 +133,6 @@ ui <- page_fluid(
                                  ),
                                ),
                                plotlyOutput("forecast_plot_total"),
-                             )
-             )
-    ),
-    tabPanel("This Month's Forecast (Monthly Trend)",
-             radioButtons(
-               "chart_mode",
-               "",
-               choices = c("Daily", "Cumulative"),
-               selected = "Daily",
-               inline = TRUE
-             ),
-             layout_columns( width = 12,
-                             card(
-                               height = c(280),
-                               card_header(
-                                 div(
-                                 ),
-                               ),
-                               plotlyOutput("forecast_plot_nextmonth"),
                              )
              )
     )
@@ -265,11 +254,6 @@ ui <- page_fluid(
                  height = c(740),
                  card_header("Monthly Vehicle Registrations by Make"),
                  DTOutput("annual_table")
-               ),
-               card(
-                 height = c(240),
-                 card_header("Monthly Vehicle Registrations Total"),
-                 DTOutput("annual_table_tiv")
                )
                # ,     
                # card(
@@ -296,11 +280,6 @@ ui <- page_fluid(
                  height = c(740),
                  card_header("Monthly Vehicle Registrations by Model"),
                  DTOutput("annual_table_model")
-               ),
-               card(
-                 height = c(240),
-                 card_header("Monthly Vehicle Registrations Total"),
-                 DTOutput("annual_table_model_tiv")
                )
                # ,     
                # card(
@@ -726,152 +705,6 @@ server <- function(input, output, session) {
     return(data)
   }
   
-  # Get annual TIV for total all stats
-  make_annual_tiv <- function(data, model) {
-    data <- filtered_data()
-    
-    if (model == "yes") {
-      monthly_data <- function(month_num, year_num){
-        data <- data |>
-          mutate(maker = "All Makes", model = "All Models") |>
-          filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-          group_by(maker, model) |>
-          summarise(count_current = sum(count), .groups = "drop")
-        
-        colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        
-        data <- data |> rename(!!colname := count_current)
-        
-        return(data)
-      }
-    
-    Jan_Count <- monthly_data(1, input$year_selected)
-    Feb_Count <- monthly_data(2, input$year_selected)
-    Mar_Count <- monthly_data(3, input$year_selected)
-    Apr_Count <- monthly_data(4, input$year_selected)
-    May_Count <- monthly_data(5, input$year_selected)
-    Jun_Count <- monthly_data(6, input$year_selected)
-    Jul_Count <- monthly_data(7, input$year_selected)
-    Aug_Count <- monthly_data(8, input$year_selected)
-    Sep_Count <- monthly_data(9, input$year_selected)
-    Oct_Count <- monthly_data(10, input$year_selected)
-    Nov_Count <- monthly_data(11, input$year_selected)
-    Dec_Count <- monthly_data(12, input$year_selected)
-  
-    Year_Total_Count <- data |>
-      mutate(maker = "All Makes", model = "All Models") |>
-      filter(year(date_reg) == input$year_selected) |>
-      group_by(maker, model) |>
-      summarise(count_current = sum(count), .groups = "drop")
-    
-    year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-    
-    Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-    
-    maker_list_annual_tiv <- maker_list_annual() |>
-      mutate(maker = "All Makes", model = "All Models")
-    
-    maker_list_annual_tiv <- head(maker_list_annual_tiv, 1)
-    
-    data <- maker_list_annual_tiv |>
-      left_join(Year_Total_Count, by = c("maker", "model")) |>
-      full_join(Jan_Count, by = c("maker", "model")) |>
-      full_join(Feb_Count, by = c("maker", "model")) |>
-      full_join(Mar_Count, by = c("maker", "model")) |>
-      full_join(Apr_Count, by = c("maker", "model")) |>
-      full_join(May_Count, by = c("maker", "model")) |>
-      full_join(Jun_Count, by = c("maker", "model")) |>
-      full_join(Jul_Count, by = c("maker", "model")) |>
-      full_join(Aug_Count, by = c("maker", "model")) |>
-      full_join(Sep_Count, by = c("maker", "model")) |>
-      full_join(Oct_Count, by = c("maker", "model")) |>
-      full_join(Nov_Count, by = c("maker", "model")) |>
-      full_join(Dec_Count, by = c("maker", "model")) |>
-      arrange(desc('Total')) |>
-      mutate(rank = row_number()) |>
-      select(rank, maker, model,
-             all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-      ) |>
-      rename(
-        `Rank` := rank,
-        `Make` := maker,
-        `Model` := model,
-      )  
-    
-    } else {
-      monthly_data <- function(month_num, year_num){
-        data <- data |>
-          mutate(maker = "All Makes") |>
-          filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-          group_by(maker) |>
-          summarise(count_current = sum(count), .groups = "drop")
-        
-        colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        
-        data <- data |> rename(!!colname := count_current)
-        
-        return(data)
-      }
-      
-      Jan_Count <- monthly_data(1, input$year_selected)
-      Feb_Count <- monthly_data(2, input$year_selected)
-      Mar_Count <- monthly_data(3, input$year_selected)
-      Apr_Count <- monthly_data(4, input$year_selected)
-      May_Count <- monthly_data(5, input$year_selected)
-      Jun_Count <- monthly_data(6, input$year_selected)
-      Jul_Count <- monthly_data(7, input$year_selected)
-      Aug_Count <- monthly_data(8, input$year_selected)
-      Sep_Count <- monthly_data(9, input$year_selected)
-      Oct_Count <- monthly_data(10, input$year_selected)
-      Nov_Count <- monthly_data(11, input$year_selected)
-      Dec_Count <- monthly_data(12, input$year_selected)
-      
-      Year_Total_Count <- data |>
-        mutate(maker = "All Makes") |>
-        filter(year(date_reg) == input$year_selected) |>
-        group_by(maker) |>
-        summarise(count_current = sum(count), .groups = "drop")
-      
-      year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-      
-      Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-      
-      maker_list_annual_tiv <- maker_list_annual() |>
-        mutate(maker = "All Makes")
-      
-      maker_list_annual_tiv <- head(maker_list_annual_tiv, 1)
-      
-      data <- maker_list_annual_tiv |>
-        left_join(Year_Total_Count, by = c("maker")) |>
-        full_join(Jan_Count, by = c("maker")) |>
-        full_join(Feb_Count, by = c("maker")) |>
-        full_join(Mar_Count, by = c("maker")) |>
-        full_join(Apr_Count, by = c("maker")) |>
-        full_join(May_Count, by = c("maker")) |>
-        full_join(Jun_Count, by = c("maker")) |>
-        full_join(Jul_Count, by = c("maker")) |>
-        full_join(Aug_Count, by = c("maker")) |>
-        full_join(Sep_Count, by = c("maker")) |>
-        full_join(Oct_Count, by = c("maker")) |>
-        full_join(Nov_Count, by = c("maker")) |>
-        full_join(Dec_Count, by = c("maker")) |>
-        arrange(desc('Total')) |>
-        mutate(rank = row_number()) |>
-        select(rank, maker,
-               all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-        ) |>
-        rename(
-          `Rank` := rank,
-          `Make` := maker,
-        )  
-      
-    }
-  
-    return(data)
-  }
-  
   # ---- Output Data Table Functions ----
   data_table_TIV <- function(df) {
     df <- df() 
@@ -901,12 +734,11 @@ server <- function(input, output, session) {
               extensions = 'Buttons',
               
               options = list(
-                dom = 'Bftip', # B = Buttons, f = filter, t = table, i/p = info/pagination
+                dom = '<"d-flex justify-content-between align-items-center mb-2"Bf>tip', # B = Buttons, f = filter, t = table, i/p = info/pagination
                 
                 fixedColumns = TRUE,
                 autoWidth = TRUE,
                 ordering = TRUE,
-                searching = FALSE,
                 buttons = c('excel'),
                 
                 buttons = list(
@@ -946,12 +778,11 @@ server <- function(input, output, session) {
               extensions = 'Buttons',
               
               options = list(
-                dom = 'Bftip', # B = Buttons, f = filter, t = table, i/p = info/pagination
+                dom = '<"d-flex justify-content-between align-items-center mb-2"Bf>tip', # B = Buttons, f = filter, t = table, i/p = info/pagination
                 
                 fixedColumns = TRUE,
                 autoWidth = TRUE,
                 ordering = TRUE,
-                searching = FALSE,
                 buttons = c('excel'),
                 
                 buttons = list(
@@ -967,24 +798,6 @@ server <- function(input, output, session) {
                 ),
                 
                 pageLength = 10
-              ),
-              class = 'cell-border stripe')
-  }
-  
-  data_table_annual_tiv <- function(df) {
-    df <- df() 
-    
-    datatable(df,
-              rownames = FALSE,
-              
-              options = list(
-                dom = 'ft', # B = Buttons, f = filter, t = table, i/p = info/pagination
-                
-                fixedColumns = TRUE,
-                autoWidth = TRUE,
-                ordering = TRUE,
-                paging = FALSE,
-                searching = FALSE
               ),
               class = 'cell-border stripe')
   }
@@ -1138,26 +951,26 @@ server <- function(input, output, session) {
         hovertemplate = "Actual: %{y:.3~s}<extra></extra>"
       ) |>
       add_lines(
-        data = forecast_next12,
+        data = forecast_df,
         x = ~date_reg, y = ~TIV,
         name = "Forecast",
         line = list(color = "orange", dash = "dot"),
         hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
       ) |>
-      add_ribbons( 
-        data = forecast_next12,
-        x = ~date_reg, ymin = ~yhat_lower, ymax = ~yhat_upper,
-        name = "95% CI",
+      add_ribbons( # This is the corrected section
+        data = forecast_df,
+        x = ~date_reg, ymin = ~lower_70, ymax = ~upper_70,
+        name = "70% CI",
         fillcolor = 'rgba(255,165,0,0.2)', 
         line = list(color = 'transparent'),
-        hovertemplate = "95% CI: %{y:.3~s}<extra></extra>"
+        hovertemplate = "70% CI: %{y:.3~s}<extra></extra>"
       ) |>
-      add_lines( 
-        data = forecast_next12,
-        x = ~date_reg, y = ~yhat_lower,
-        name = "95% CI",
+      add_lines( # This is the corrected section
+        data = forecast_df,
+        x = ~date_reg, y = ~lower_70,
+        name = "70% CI",
         line = list(color = "rgba(255,165,0,0.2)", width = 0), 
-        hovertemplate = "95% CI: %{y:.3~s}<extra></extra>"
+        hovertemplate = "70% CI: %{y:.3~s}<extra></extra>"
       ) |>
       layout(
         title = "TIV with 12-Month Forecast",
@@ -1167,41 +980,6 @@ server <- function(input, output, session) {
       )
   }
   
-  plot_chart_fc_nextmonth <- function() {
-    df <- forecast_nextmonth
-    
-    if (input$chart_mode == "Daily") {
-      plot_ly() |>
-        add_bars(
-          data = df,
-          x = ~date_reg, y = ~TIV,
-          name = "Forecast",
-          marker = list(color = "orange"),
-          hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
-        ) |>
-        layout(
-          title = "TIV with Daily Forecast",
-          xaxis = list(title = "Day"),
-          yaxis = list(title = "Registration"),
-          hovermode = "x"
-        )
-    } else {
-      plot_ly() |>
-        add_lines(
-          data = df,
-          x = ~date_reg, y = ~TIV_Cum,
-          name = "Forecast",
-          line = list(color = "orange", dash = "dot"),
-          hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
-        ) |>
-        layout(
-          title = "TIV with Daily Forecast",
-          xaxis = list(title = "Day"),
-          yaxis = list(title = "Registration"),
-          hovermode = "x"
-        )
-    }
-  }
   # ---- Reactive summary total ----
   summary_total <- reactive({
     month_current_count_ttl <- car_data |>
@@ -1263,27 +1041,22 @@ server <- function(input, output, session) {
   
   annual_data <- reactive(make_annual(car_data, "maker", "Make"))
   annual_data_model <- reactive(make_annual(car_data, "model", "Model"))
-  annual_data_tiv <- reactive(make_annual_tiv(car_data, "no"))
-  annual_data_tiv_model <- reactive(make_annual_tiv(car_data, "yes"))
   
   # ---- Output 1: DataTable ----
-  output$summary_table_total    <- renderDT(data_table_TIV(summary_total))
-  output$summary_table          <- renderDT(data_table(summary_data), server = FALSE)
-  output$summary_table_model    <- renderDT(data_table(summary_data_model), server = FALSE)
-  output$summary_table_fuel     <- renderDT(data_table(summary_data_fuel), server = FALSE)
+  output$summary_table_total  <- renderDT(data_table_TIV(summary_total))
+  output$summary_table        <- renderDT(data_table(summary_data), server = FALSE)
+  output$summary_table_model  <- renderDT(data_table(summary_data_model), server = FALSE)
+  output$summary_table_fuel   <- renderDT(data_table(summary_data_fuel), server = FALSE)
   
-  output$annual_table           <- renderDT(data_table_annual(annual_data), server = FALSE)
-  output$annual_table_model     <- renderDT(data_table_annual(annual_data_model), server = FALSE)
-  output$annual_table_tiv       <- renderDT(data_table_annual_tiv(annual_data_tiv), server = FALSE)
-  output$annual_table_model_tiv <- renderDT(data_table_annual_tiv(annual_data_tiv_model), server = FALSE)
+  output$annual_table         <- renderDT(data_table_annual(annual_data), server = FALSE)
+  output$annual_table_model   <- renderDT(data_table_annual(annual_data_model), server = FALSE)
   
   # ---- Output 2: Plotly Trend ----
-  output$trend_plot_total       <- renderPlotly(plot_chart_total(input$agg_level_ttl))
-  output$trend_plot_make        <- renderPlotly(plot_chart(summary_data, maker, "Make", input$agg_level))
-  output$trend_plot_model       <- renderPlotly(plot_chart(summary_data_model, model, "Model", input$agg_level_model))
-  output$trend_plot_fuel        <- renderPlotly(plot_chart(summary_data_fuel, fuel_grouped, "Fuel Type", input$agg_level_fuel))
-  output$forecast_plot_total    <- renderPlotly(plot_chart_fc_total())
-  output$forecast_plot_nextmonth<- renderPlotly(plot_chart_fc_nextmonth())
+  output$trend_plot_total     <- renderPlotly(plot_chart_total(input$agg_level_ttl))
+  output$trend_plot_make      <- renderPlotly(plot_chart(summary_data, maker, "Make", input$agg_level))
+  output$trend_plot_model     <- renderPlotly(plot_chart(summary_data_model, model, "Model", input$agg_level_model))
+  output$trend_plot_fuel      <- renderPlotly(plot_chart(summary_data_fuel, fuel_grouped, "Fuel Type", input$agg_level_fuel))
+  output$forecast_plot_total  <- renderPlotly(plot_chart_fc_total())
   
   observeEvent(input$reset_selection, {
     if (input$tabs == "By Make") {
@@ -1300,30 +1073,3 @@ server <- function(input, output, session) {
 } # END OF SERVER
 
 shinyApp(ui, server)
-
-
-# OLD Forecasting Model (SARIMA)
-
-# ---- Forecasting ----
-# 
-# # convert to time series object
-# tiv_ts <- ts(tiv_monthly$TIV, start = c(2010, 1), frequency = 12)
-# 
-# # auto.arima to select the best seasonal ARIMA
-# fit <- auto.arima(tiv_ts, seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
-# summary(fit)
-# 
-# # forecast the upcoming 12 months and bind back to the original monthly tiv data
-# forecast_12 <- forecast(fit, h = 12, level = c(70, 95))
-# 
-# # convert to dataframe
-# forecast_df <- tibble(
-#   date_reg = seq(max(tiv_monthly$date_reg) %m+% months(1),
-#                  by = "1 month", length.out = 12),
-#   TIV = as.numeric(forecast_12$mean),
-#   lower_70 = as.numeric(forecast_12$lower[, 1]),
-#   upper_70 = as.numeric(forecast_12$upper[, 1]),
-#   lower_95 = as.numeric(forecast_12$lower[, 2]),
-#   upper_95 = as.numeric(forecast_12$upper[, 2]),
-#   type = "Forecast"
-# )

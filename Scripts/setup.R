@@ -6,7 +6,7 @@ library(plotly)
 
 setwd("C:/R Projects/JPJ_Car_Viz")
 
-# Define the years you want to pull
+# Define the years to pull
 years <- 2010:2026
 
 # Generate URLs and read CSVs
@@ -18,7 +18,7 @@ car_data_list <- map(years, ~ read_csv(
 car_data_full <- bind_rows(car_data_list)
 
 # Makes all dates to use 1st day of the month only.
-car_data_full <- car_data_full |> mutate(date_reg = floor_date(date_reg, unit = "month")) |>
+car_data_full <- car_data_full |>
   mutate(fuel_grouped = case_when(
     fuel %in% c("petrol") ~ "Petrol",
     fuel %in% c("greendiesel", "diesel") ~ "Diesel",
