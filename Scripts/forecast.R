@@ -4,7 +4,19 @@ library(tidyverse)
 
 options(scipen = 999) # avoid using scientific notation.
 
-# setwd("C:/R Projects/JPJ_Car_Viz")
+setwd("C:/R Projects/JPJ_Car_Viz")
+
+# To update every month
+# Cutoffs for validation
+cutoffs <- as.Date(c('2024-12-31', 
+                     '2025-01-31', '2025-02-28', '2025-03-31', '2025-04-30', '2025-05-31', '2025-06-30', 
+                     '2025-07-31', '2025-08-31', '2025-09-30', '2025-10-31', '2025-11-30', '2025-12-31', 
+                     '2026-01-31', '2026-02-28', '2026-03-30'
+))
+
+# M+1 to forecast:
+Next_FC_Year = 2026
+Next_FC_Month = 5
 
 # ---- Load Public Holidays Data ----
 PH_data <- read_excel("Data/Public_Holidays_MY_2010-2035.xlsx") |>
@@ -20,7 +32,7 @@ car_df <- readr::read_csv("Data/car_data_sum.csv") |>
   rename(`ds` := date_reg) |> 
   filter(year(ds) >= 2022)
 
-# ---- Model 1: Default - Yearly, Weekly seasonality.
+# ---- Model 1: Default - Yearly, Weekly seasonality. ----
 m1 <- prophet(car_df)
 
 future1 <- make_future_dataframe(m1, periods = 365)
@@ -31,7 +43,7 @@ tail(forecast1[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m1, forecast1)
 prophet_plot_components(m1, forecast1)
 
-# ---- Model 2: Add Monthly Seasonality - Yearly, Weekly, & Monthly seasonality.
+# ---- Model 2: Add Monthly Seasonality - Yearly, Weekly, & Monthly seasonality. ----
 m2 <- prophet(car_df)
 m2 <- prophet(monthly.seasonality=TRUE)
 m2 <- add_seasonality(m2, name='monthly', period=30.5, fourier.order=5)
@@ -45,7 +57,7 @@ tail(forecast2[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m2, forecast2)
 prophet_plot_components(m2, forecast2)
 
-# ---- Model 3: Add Public Holidays - Yearly, Weekly, Monthly, & Public Holiday seasonality.
+# ---- Model 3: Add Public Holidays - Yearly, Weekly, Monthly, & Public Holiday seasonality. ----
 m3 <- prophet(car_df)
 m3 <- prophet(monthly.seasonality=TRUE, holidays = PH_data)
 m3 <- add_seasonality(m3, name='monthly', period=30.5, fourier.order=5)
@@ -59,7 +71,7 @@ tail(forecast3[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m3, forecast3)
 prophet_plot_components(m3, forecast3)
 
-# ---- Model 4: Treat COVID Lockdown - Yearly, Weekly, Monthly, Public Holiday, & COVID Lockdown seasonality.
+# ---- Model 4: Treat COVID Lockdown - Yearly, Weekly, Monthly, Public Holiday, & COVID Lockdown seasonality. ----
 MCO_lockdowns <- tibble(
  holiday = c('MCO_1', 'MCO_2'),
  ds = as.Date(c('2020-03-18', '2021-06-01')),
@@ -83,10 +95,10 @@ tail(forecast4[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m4, forecast4)
 prophet_plot_components(m4, forecast4)
 
-# ---- Model 5: Month Closing Effect - Yearly, Weekly, Monthly, Public Holiday, COVID Lockdown seasonality, & Month Closing Effect.
+# ---- Model 5: Month Closing Effect - Yearly, Weekly, Monthly, Public Holiday, COVID Lockdown seasonality, & Month Closing Effect.  ----
 df5 <- car_df |>
   mutate(
-    is_final_week       = day(ds) > (days_in_month(ds) - 7),
+    is_final_week       = day(ds) > (days_in_month(ds) - 5),
     is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
     is_final_day        = day(ds) == days_in_month(ds),
     is_first_week       = day(ds) <= 7 & day(ds) >= 3,
@@ -108,7 +120,7 @@ m5 <- fit.prophet(m5, df5)
 future5 <- make_future_dataframe(m5, periods = 365)
 future5 <- future5 |>
   mutate(
-    is_final_week       = day(ds) > (days_in_month(ds) - 7),
+    is_final_week       = day(ds) > (days_in_month(ds) - 5),
     is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
     is_final_day        = day(ds) == days_in_month(ds),
     is_first_week       = day(ds) <= 7 & day(ds) >= 3,
@@ -122,7 +134,7 @@ tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m5, forecast5)
 prophet_plot_components(m5, forecast5)
 
-# ---- Model 6: Log Transform for Non-Negativity
+# ---- Model 6: Log Transform for Non-Negativity ----
 df6_lt <- df5
 df6_lt$y <- log1p(df6_lt$y)
 
@@ -147,11 +159,19 @@ forecast6$yhat_lower <- expm1(forecast6$yhat_lower)
 forecast6$yhat_upper <- expm1(forecast6$yhat_upper)
 tail(forecast6[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 
-# ---- Model 7: Tweaked Version of Model 5
-df7 <- df5
+# ---- Model 7: Tweaked Version of Model 5 ----
+df7 <- car_df |>
+  mutate(
+    is_final_week       = day(ds) > (days_in_month(ds) - 5),
+    is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
+    is_final_day        = day(ds) == days_in_month(ds),
+    is_first_week       = day(ds) <= 7 & day(ds) >= 3,
+    is_first_2days      = day(ds) == 2,
+    is_first_day        = day(ds) == 1
+  )
 
 m7 <- prophet()
-m7 <- prophet(monthly.seasonality=20, holidays = holidays_MCO, growth = 'linear') # linear growth
+m7 <- prophet(monthly.seasonality=20, holidays = holidays_MCO)
 m7 <- add_seasonality(m7, name='monthly', period=30.5, fourier.order=10) # fourier order 10
 m7 <- add_regressor(m7, 'is_final_week')
 m7 <- add_regressor(m7, 'is_final_2ld')
@@ -164,7 +184,7 @@ m7 <- fit.prophet(m7, df7)
 future7 <- make_future_dataframe(m7, periods = 365)
 future7 <- future7 |>
   mutate(
-    is_final_week       = day(ds) > (days_in_month(ds) - 7),
+    is_final_week       = day(ds) > (days_in_month(ds) - 5),
     is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
     is_final_day        = day(ds) == days_in_month(ds),
     is_first_week       = day(ds) <= 7,
@@ -178,6 +198,50 @@ tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m7, forecast7)
 prophet_plot_components(m7, forecast7)
 
+
+# ---- Model 8: Capped Growth ----
+cap_m8 = 2500 # set daily carrying capacity
+
+df8 <- car_df |>
+  mutate(
+    is_final_week       = day(ds) > (days_in_month(ds) - 5),
+    is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
+    is_final_day        = day(ds) == days_in_month(ds),
+    is_first_week       = day(ds) <= 7 & day(ds) >= 3,
+    is_first_2days      = day(ds) == 2,
+    is_first_day        = day(ds) == 1,
+    
+    cap = cap_m8 # recall daily carrying capacity
+  )
+
+m8 <- prophet()
+m8 <- prophet(monthly.seasonality = 20, holidays = holidays_MCO, growth = 'logistic') #  logistic growth
+m8 <- add_seasonality(m8, name = 'monthly', period = 30.5, fourier.order = 10) # fourier order 10
+m8 <- add_regressor(m8, 'is_final_week')
+m8 <- add_regressor(m8, 'is_final_2ld')
+m8 <- add_regressor(m8, 'is_final_day')
+m8 <- add_regressor(m8, 'is_first_week')
+m8 <- add_regressor(m8, 'is_first_2days')
+m8 <- add_regressor(m8, 'is_first_day')
+m8 <- fit.prophet(m8, df8)
+
+future8 <- make_future_dataframe(m8, periods = 365)
+future8$cap <- cap_m8 # recall daily carrying capacity
+future8 <- future8 |>
+  mutate(
+    is_final_week       = day(ds) > (days_in_month(ds) - 5),
+    is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
+    is_final_day        = day(ds) == days_in_month(ds),
+    is_first_week       = day(ds) <= 7,
+    is_first_2days      = day(ds) == 2,
+    is_first_day        = day(ds) == 1
+  )
+
+forecast8 <- predict(m8, future8)
+tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+
+plot(m8, forecast8)
+prophet_plot_components(m8, forecast8)
 
 # Plot trimmed (plus minus 365 days)
 last_date  <- max(car_df$ds)
@@ -193,12 +257,6 @@ plot(m_trimmed, forecast_trimmed)
 
 
 # ---- Model Validation
-cutoffs <- as.Date(c('2024-12-31', 
-                     '2025-01-31', '2025-02-28', '2025-03-31', '2025-04-30', '2025-05-31', '2025-06-30', 
-                     '2025-07-31', '2025-08-31', '2025-09-30', '2025-10-31', '2025-11-30', '2025-12-31', 
-                     '2026-01-31', '2026-02-28'
-                     ))
-
 dfcv1 <- cross_validation(m1, cutoffs = cutoffs, horizon = 31, units = 'days')
 dfp1 <- performance_metrics(dfcv1)
     
@@ -223,15 +281,29 @@ dfp6 <- performance_metrics(dfcv6)
 
 dfcv7 <- cross_validation(m7, cutoffs = cutoffs, horizon = 31, units = 'days')
 dfp7 <- performance_metrics(dfcv7)
-write_csv(dfcv7, "Forecasts/m7_crossvalid.csv")
+
+dfcv8 <- cross_validation(m8, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfp8 <- performance_metrics(dfcv8)
+write_csv(forecast8, "Forecasts/m8_results.csv")
+write_csv(dfcv8, "Forecasts/m8_crossvalid.csv")
 
 # --- write the files to the folder ---
+write_csv(forecast1, "Forecasts/m1_results.csv")
+write_csv(forecast2, "Forecasts/m2_results.csv")
+write_csv(forecast3, "Forecasts/m3_results.csv")
+write_csv(forecast4, "Forecasts/m4_results.csv")
+write_csv(forecast5, "Forecasts/m5_results.csv")
+write_csv(forecast6, "Forecasts/m6_results.csv")
+write_csv(forecast7, "Forecasts/m7_results.csv")
+
+
 write_csv(dfcv1, "Forecasts/m1_crossvalid.csv")
 write_csv(dfcv2, "Forecasts/m2_crossvalid.csv")
 write_csv(dfcv3, "Forecasts/m3_crossvalid.csv")
 write_csv(dfcv4, "Forecasts/m4_crossvalid.csv")
 write_csv(dfcv5, "Forecasts/m5_crossvalid.csv")
 write_csv(dfcv6, "Forecasts/m6_crossvalid.csv")
+write_csv(dfcv7, "Forecasts/m7_crossvalid.csv")
 
 
 # Based on data validation steps, Model 7 has the lowest error against actual.
@@ -239,13 +311,13 @@ write_csv(dfcv6, "Forecasts/m6_crossvalid.csv")
 
 # Prepare upcoming month's forecast including monthly trend
 forecast_sel1 <- forecast7 |>
-  filter(year(ds) == 2026 & month(ds) == 4) |>
+  filter(year(ds) == Next_FC_Year & month(ds) == Next_FC_Month) |>
   select(ds, yhat, yhat_lower, yhat_upper) |>
   rename(Date := 'ds', yhat1 := 'yhat', yhat1_lower := 'yhat_lower', yhat1_upper := 'yhat_upper') |>
   mutate(yhat1 = case_when(yhat1 < 0 ~ 0, TRUE ~ yhat1))
 
-forecast_sel2 <- forecast6 |>
-  filter(year(ds) == 2026 & month(ds) == 4) |>
+forecast_sel2 <- forecast6 |> # for monthly trend, follows log model for the first 10 days of the month
+  filter(year(ds) == Next_FC_Year & month(ds) == Next_FC_Month) |>
   select(ds, yhat, yhat_lower, yhat_upper) |>
   rename(Date := 'ds', yhat2 := 'yhat', yhat2_lower := 'yhat_lower', yhat2_upper := 'yhat_upper') |>
   mutate(yhat2 = case_when(yhat2 < 0 ~ 0, TRUE ~ yhat2))

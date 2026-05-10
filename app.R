@@ -9,7 +9,9 @@ library(forecast)
 library(bslib)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
-data_asof = "data as of 31st March 2026" # Update latest description here
+data_asof = "data as of 30th April 2026" # Update latest description here
+
+Next_FC_Text = "May 2026 Forecast"
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("Data/car_data_sum.csv") |>
@@ -129,26 +131,34 @@ ui <- page_fluid(
              )
     ),
     tabPanel("This Month's Forecast (Monthly Trend)",
-             radioButtons(
-               "chart_mode",
-               "",
-               choices = c("Daily", "Cumulative"),
-               selected = "Daily",
-               inline = TRUE
+      fluidRow(
+             column(
+               width = 3,
+               radioButtons(
+                 "chart_mode",
+                 "",
+                 choices = c("Cumulative", "Daily"),
+                 selected = "Cumulative",
+                 inline = TRUE
+               )
              ),
+             column(width = 3, uiOutput("kpi_full")),
+             column(width = 3, uiOutput("kpi_mtd")),
+             column(width = 3, uiOutput("kpi_progress")),
+      ),
              layout_columns( width = 12,
                              card(
                                height = c(280),
                                card_header(
-                                 div(
-                                 ),
+                                 div(),
                                ),
-                               plotlyOutput("forecast_plot_nextmonth"),
+                               plotlyOutput("forecast_plot_nextmonth")
                              )
              )
     )
   ),
   
+  # ---- UI - Breakdown ----
   fluidRow(
     column(width = 4,
            selectInput(
@@ -332,6 +342,32 @@ ui <- page_fluid(
 # ---- SERVER ----
 server <- function(input, output, session) {
   
+  
+  # ---- Get MTD Progress Values (KPI) ----
+  kpi_values <- reactive({
+    df <- forecast_nextmonth
+    
+    today <- Sys.Date()
+    
+    # get MTD forecast (cumulative up to today)
+    fc_mtd <- df |>
+      filter(year(date_reg) == year(today) & month(date_reg) == month(today) & day(date_reg) == day(today)) |>
+      summarise(value = sum(TIV_Cum)) |>
+      pull(value)
+  
+    # get full month
+    fc_full <- sum(df$TIV)
+    
+    # % registration progression
+    progress <- fc_mtd / fc_full
+    
+    list(
+      fc_mtd = fc_mtd,
+      fc_full = fc_full,
+      progress = progress
+    )
+  })
+  
   # ---- Filter by Fuel Type, Segment, & Latest Year ----
   filtered_data <- reactive({
     df <- car_data
@@ -354,7 +390,7 @@ server <- function(input, output, session) {
   })
   
   
-  # --- get unique make models ---
+  # ---- Get unique make models ----
   model_list <- reactive({
     df <- filtered_data() |>
       group_by(maker, model) |>
@@ -1284,6 +1320,50 @@ server <- function(input, output, session) {
   output$trend_plot_fuel        <- renderPlotly(plot_chart(summary_data_fuel, fuel_grouped, "Fuel Type", input$agg_level_fuel))
   output$forecast_plot_total    <- renderPlotly(plot_chart_fc_total())
   output$forecast_plot_nextmonth<- renderPlotly(plot_chart_fc_nextmonth())
+  
+  # ---- Output 3: Cards ----
+  output$kpi_full <- renderUI({
+    vals <- kpi_values()
+    div(
+      style = "
+      background:#f8f9fa;
+      padding:12px;
+      border-radius:6px;
+      text-align:center;
+      box-shadow:0 1px 3px rgba(0,0,0,0.1);
+      ",
+      div(style="font-size:12px; color:#666;", Next_FC_Text),
+      div(style="font-size:22px; font-weight:bold;", scales::comma(vals$fc_full))
+    )
+  })
+  output$kpi_mtd <- renderUI({
+    vals <- kpi_values()
+    div(
+      style = "
+      background:#f8f9fa;
+      padding:12px;
+      border-radius:6px;
+      text-align:center;
+      box-shadow:0 1px 3px rgba(0,0,0,0.1);
+      ",
+      div(style="font-size:12px; color:#666;", "MTD Forecast"),
+      div(style="font-size:22px; font-weight:bold;", scales::comma(vals$fc_mtd))
+    )
+  })
+  output$kpi_progress <- renderUI({
+    vals <- kpi_values()
+    div(
+      style = "
+      background:#f8f9fa;
+      padding:12px;
+      border-radius:6px;
+      text-align:center;
+      box-shadow:0 1px 3px rgba(0,0,0,0.1);
+      ",
+      div(style="font-size:12px; color:#666;", "Progress"),
+      div(style="font-size:22px; font-weight:bold;", scales::percent(vals$progress, accuracy = 0.1))
+    )
+  })
   
   observeEvent(input$reset_selection, {
     if (input$tabs == "By Make") {

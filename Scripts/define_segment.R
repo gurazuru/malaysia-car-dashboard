@@ -30,7 +30,7 @@ list_suvb       <- c("WR-V", "HR-V", "Ativa", "X50", "CX-3", "CX-5", "CX-30", "C
                      "XV", "Omoda 5", "Tiggo", "ASX", "Forester", "Atto 3", "Kicks", "iCaur 03",
                      "iCaur V23", "B10", "Traz", "Atto 2", "C-HR", "Captur", "2008", "SX4", "Jimny",
                      "Haval H1", "Haval M4", "GS3", "Jimny Sierra", "Ecosport", "Haval H2", "Kona",
-                     "Jaecoo J5", "QV-E", "S5")
+                     "Jaecoo J5", "QV-E", "S5", "Xforce")
 
 list_suvcd      <- c("CR-V", "X70", "X-Trail", "Harrier", "Jaecoo J7", "Jaecoo J8", "X90", 
                      "Fortuner", "CX-8", "CX-9", "e.MAS 7", "3008", "Outlander", "Model Y", "Omoda 9", 
