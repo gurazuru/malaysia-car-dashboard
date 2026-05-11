@@ -10,7 +10,6 @@ library(bslib)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
 data_asof = "data as of 30th April 2026" # Update latest description here
-
 Next_FC_Text = "May 2026 Forecast"
 
 # ---- Load and combine data ----
@@ -937,12 +936,12 @@ server <- function(input, output, session) {
               extensions = 'Buttons',
               
               options = list(
-                dom = 'Bftip', # B = Buttons, f = filter, t = table, i/p = info/pagination
+                dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
                 
                 fixedColumns = TRUE,
                 autoWidth = TRUE,
                 ordering = TRUE,
-                searching = FALSE,
+                searching = TRUE,
                 buttons = c('excel'),
                 
                 buttons = list(
@@ -982,12 +981,12 @@ server <- function(input, output, session) {
               extensions = 'Buttons',
               
               options = list(
-                dom = 'Bftip', # B = Buttons, f = filter, t = table, i/p = info/pagination
-                
+                dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
+
                 fixedColumns = TRUE,
                 autoWidth = TRUE,
                 ordering = TRUE,
-                searching = FALSE,
+                searching = TRUE,
                 buttons = c('excel'),
                 
                 buttons = list(
