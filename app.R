@@ -159,7 +159,7 @@ ui <- page_fluid(
   
   # ---- UI - Breakdown ----
   fluidRow(
-    column(width = 4,
+    column(width = 3,
            selectInput(
              inputId = "global_fuel_type",
              label = "Fuel Type:",
@@ -167,7 +167,7 @@ ui <- page_fluid(
              selected = "All"
            )
     ),
-    column(width = 4,
+    column(width = 3,
            selectInput(
              inputId = "global_segment",
              label = "Vehicle Segment:",
@@ -175,15 +175,26 @@ ui <- page_fluid(
              selected = "All"
            )
     ),
-    column(width = 4,
+    column(width = 3,
            selectInput(
              inputId = "year_selected",
              label = "Year:",
              choices = c("2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011"),
              selected = "2026"
            )
+    ),
+    column(width = 3,
+           selectInput(
+             inputId = "state_selected",
+             label = "State*:",
+             choices = c("All", "Rakan Niaga", sort(setdiff(unique(car_data$state), "Rakan Niaga"))),
+             selected = "All"
+           )
     )
   ),
+  
+  # Note on "Rakan Niaga".
+  tags$p(tags$em("*In recent years, more and more registrations have been made under 'Rakan Niaga'.")),
   
   tabsetPanel(
     id = "tabs",
@@ -377,6 +388,11 @@ server <- function(input, output, session) {
     df <- df
     if (input$global_segment != "All") {
       df <- df |> filter(segment == input$global_segment)
+    }
+    
+    df <- df
+    if (input$state_selected != "All") {
+      df <- df |> filter(state == input$state_selected)
     }
     
     df <- df |> filter(year(date_reg) %in% c(as.numeric(input$year_selected), 
@@ -1303,7 +1319,17 @@ server <- function(input, output, session) {
   
   # ---- Output 1: DataTable ----
   output$summary_table_total    <- renderDT(data_table_TIV(summary_total))
-  output$summary_table          <- renderDT(data_table(summary_data), server = FALSE)
+  
+  # Version that doesn't show error if there's no data when filtered (but creates a new error lol)
+  output$summary_table          <- renderDT({
+      validate(
+        need(nrow(summary_data()) > 0, "No data available for the selected filters")
+      )
+
+      data_table(summary_data)
+    }, server = FALSE)
+
+  # output$summary_table          <- renderDT(data_table(summary_data), server = FALSE)
   output$summary_table_model    <- renderDT(data_table(summary_data_model), server = FALSE)
   output$summary_table_fuel     <- renderDT(data_table(summary_data_fuel), server = FALSE)
   

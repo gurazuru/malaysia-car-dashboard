@@ -38,7 +38,7 @@ car_data_path <- "Data/car_data_sum.csv"
 car_data_sample_path <- "Data/car_data_sum_sample.csv"
 
 car_data_sum <- car_data_full |>
-  count(date_reg, type, maker, model, fuel_grouped, name = "count")
+  count(date_reg, type, maker, model, fuel_grouped, state, name = "count")
 
 car_data_sum <- car_data_sum |>
   left_join(segment_list, by = c("maker", "model"))
