@@ -12,7 +12,7 @@ list_hatchback  <- c("Myvi", "Jazz", "Iriz", "Yaris", "Dolphin", "Fiesta", "I30"
                      "Ora", "e.MAS 5", "Satria", "Satria Neo", "Clio", "Twizy", "Zoe", "i10",
                      "Suprima S", "308", "Beetle", "208", "CR-Z", "Focus", "Atos", "207", "B-Class",
                      "Gen2", "Savvy", "N-Box", "Clubman", "John Cooper Works", "Scirocco", "Brabus",
-                     "Veloster", "Getz", "New Beetle")
+                     "Veloster", "Getz", "New Beetle", "Bingo", "Box E3")
 
 list_sedana     <- c("Bezza", "Saga", "Persona", "Wira")
 
@@ -30,7 +30,7 @@ list_suvb       <- c("WR-V", "HR-V", "Ativa", "X50", "CX-3", "CX-5", "CX-30", "C
                      "XV", "Omoda 5", "Tiggo", "ASX", "Forester", "Atto 3", "Kicks", "iCaur 03",
                      "iCaur V23", "B10", "Traz", "Atto 2", "C-HR", "Captur", "2008", "SX4", "Jimny",
                      "Haval H1", "Haval M4", "GS3", "Jimny Sierra", "Ecosport", "Haval H2", "Kona",
-                     "Jaecoo J5", "QV-E", "S5", "Xforce")
+                     "Jaecoo J5", "QV-E", "S5", "Xforce", "e:N1")
 
 list_suvcd      <- c("CR-V", "X70", "X-Trail", "Harrier", "Jaecoo J7", "Jaecoo J8", "X90", 
                      "Fortuner", "CX-8", "CX-9", "e.MAS 7", "3008", "Outlander", "Model Y", "Omoda 9", 

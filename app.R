@@ -7,6 +7,7 @@ library(DT)
 library(plotly)
 library(forecast)
 library(bslib)
+library(memoise)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
 data_asof = "data as of 30th April 2026" # Update latest description here
@@ -22,6 +23,7 @@ car_data <- readr::read_csv("Data/car_data_sum.csv") |>
 
 # ---- Key Date Variables ----
 latest_date <- max(car_data$date_reg)
+latest_date_nextmonth <- ceiling_date(latest_date %m+% months(1), "month") %m-% days(1)
 min_date <- latest_date %m-% years(5)  
 
 year_current <- year(latest_date)
@@ -179,7 +181,7 @@ ui <- page_fluid(
            selectInput(
              inputId = "year_selected",
              label = "Year:",
-             choices = c("2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011"),
+             choices = c("2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016"),
              selected = "2026"
            )
     ),
@@ -352,7 +354,6 @@ ui <- page_fluid(
 # ---- SERVER ----
 server <- function(input, output, session) {
   
-  
   # ---- Get MTD Progress Values (KPI) ----
   kpi_values <- reactive({
     df <- forecast_nextmonth
@@ -360,11 +361,18 @@ server <- function(input, output, session) {
     today <- Sys.Date()
     
     # get MTD forecast (cumulative up to today)
-    fc_mtd <- df |>
-      filter(year(date_reg) == year(today) & month(date_reg) == month(today) & day(date_reg) == day(today)) |>
-      summarise(value = sum(TIV_Cum)) |>
+    if (year(latest_date_nextmonth) < year(today) || 
+       (year(latest_date_nextmonth) == year(today) && month(latest_date_nextmonth) == month(today)) ) {
+        fc_mtd <- df |>
+        filter(year(date_reg) == year(today) & month(date_reg) == month(today) & day(date_reg) == day(today)) |>
+        summarise(value = sum(TIV_Cum)) |>
+        pull(value)
+    } else { 
+      fc_mtd <- df |>
+      summarise(value = sum(TIV)) |>
       pull(value)
-  
+    }
+    
     # get full month
     fc_full <- sum(df$TIV)
     
@@ -400,10 +408,7 @@ server <- function(input, output, session) {
                                              as.numeric(input$year_selected) - 2,
                                              as.numeric(input$year_selected) - 3,
                                              as.numeric(input$year_selected) - 4))
-    
-    return(df)
   })
-  
   
   # ---- Get unique make models ----
   model_list <- reactive({
@@ -455,189 +460,192 @@ server <- function(input, output, session) {
     
     data <- filtered_data()
     
-    # ---- Key Date Variables ----
-    month_current <- max(data$date_reg)
-    month_previous <- month_current %m-% months(1)
-    month_previous_year <- month_current %m-% months(12)
-    
-    year_current <- year(month_current)
-    ytd_current_start <- ymd(paste0(year_current, "-01-01"))
-    ytd_current_end <- month_current
-    
-    ytd_previous_start <- ytd_current_start %m-% years(1)
-    ytd_previous_end <- ytd_current_end %m-% years(1)
-    
-    
-    # Define all the relevant dates.
-    month_current_name <- format(month_current, "%b %Y")
-    month_previous_name <- format(month_previous, "%b %Y")
-    month_previous_year_name <- format(month_previous_year, "%b %Y")
-    year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
-    year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
-    
-    if (group_col == "model"){
-      month_current_count <- data |>
-        filter(date_reg == month_current) |>
-        group_by(maker, !!group_col) |>
-        summarise(count_current = sum(count), .groups = "drop")
-      
-      month_previous_count <- data |>
-        filter(date_reg == month_previous) |>
-        group_by(maker, !!group_col) |>
-        summarise(count_previous = sum(count), .groups = "drop")
-      
-      month_previous_year_count <- data |>
-        filter(date_reg == month_previous_year) |>
-        group_by(maker, !!group_col) |>
-        summarise(count_previous_year = sum(count), .groups = "drop")
-      
-      ytd_current_count <- data |>
-        filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
-        group_by(maker, !!group_col) |>
-        summarise(count_ytd_current = sum(count), .groups = "drop")
-      
-      ytd_previous_count <- data |>
-        filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
-        group_by(maker, !!group_col) |>
-        summarise(count_ytd_previous = sum(count), .groups = "drop")
-      
-      model_list() |>
-        left_join(month_current_count, by = c("maker", "model")) |>
-        mutate(count_current = replace_na(count_current, 0)) |>
-        full_join(month_previous_count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(month_previous_year_count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(ytd_current_count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(ytd_previous_count, by = c("maker", rlang::as_string(group_col))) |>
-        mutate(
-          across(starts_with("count"), \(x) replace_na(x, 0)),
-          growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
-          growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
-          growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
-        ) |>
-        arrange(desc(count_current)) |>
-        mutate(rank = row_number()) |>
-        select(rank, maker, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
-        rename(
-          `Rank` := rank,
-          `Make` := maker,
-          !!group_col_name := !!group_col,
-          !!month_current_name := count_current,
-          !!month_previous_name := count_previous,
-          `Growth (MoM)` := growth_MoM,
-          !!month_previous_year_name := count_previous_year,
-          `Growth (YoY)` := growth_YoY,
-          !!year_current_name := count_ytd_current,
-          !!year_previous_name := count_ytd_previous,
-          `Growth (YTD)` := growth_YTD
-        ) 
-    } else if (group_col == "maker") {
-      month_current_count <- data |>
-        filter(date_reg == month_current) |>
-        group_by(!!group_col) |>
-        summarise(count_current = sum(count), .groups = "drop")
-      
-      month_previous_count <- data |>
-        filter(date_reg == month_previous) |>
-        group_by(!!group_col) |>
-        summarise(count_previous = sum(count), .groups = "drop")
-      
-      month_previous_year_count <- data |>
-        filter(date_reg == month_previous_year) |>
-        group_by(!!group_col) |>
-        summarise(count_previous_year = sum(count), .groups = "drop")
-      
-      ytd_current_count <- data |>
-        filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
-        group_by(!!group_col) |>
-        summarise(count_ytd_current = sum(count), .groups = "drop")
-      
-      ytd_previous_count <- data |>
-        filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
-        group_by(!!group_col) |>
-        summarise(count_ytd_previous = sum(count), .groups = "drop")
-      
-      maker_list() |>
-        left_join(month_current_count, by = c(rlang::as_string(group_col))) |>
-        mutate(count_current = replace_na(count_current, 0)) |>
-        full_join(month_previous_count, by = rlang::as_string(group_col)) |>
-        full_join(month_previous_year_count, by = rlang::as_string(group_col)) |>
-        full_join(ytd_current_count, by = rlang::as_string(group_col)) |>
-        full_join(ytd_previous_count, by = rlang::as_string(group_col)) |>
-        mutate(
-          across(starts_with("count"), \(x) replace_na(x, 0)),
-          growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
-          growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
-          growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
-        ) |>
-        arrange(desc(count_current)) |>
-        mutate(rank = row_number()) |>
-        select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
-        rename(
-          `Rank` := rank,
-          !!group_col_name := !!group_col,
-          !!month_current_name := count_current,
-          !!month_previous_name := count_previous,
-          `Growth (MoM)` := growth_MoM,
-          !!month_previous_year_name := count_previous_year,
-          `Growth (YoY)` := growth_YoY,
-          !!year_current_name := count_ytd_current,
-          !!year_previous_name := count_ytd_previous,
-          `Growth (YTD)` := growth_YTD
-        ) 
+    if (nrow(data) == 0) {
     } else {
-      month_current_count <- data |>
-        filter(date_reg == month_current) |>
-        group_by(!!group_col) |>
-        summarise(count_current = sum(count), .groups = "drop")
+      # ---- Key Date Variables ----
+      month_current <- max(data$date_reg)
+      month_previous <- month_current %m-% months(1)
+      month_previous_year <- month_current %m-% months(12)
       
-      month_previous_count <- data |>
-        filter(date_reg == month_previous) |>
-        group_by(!!group_col) |>
-        summarise(count_previous = sum(count), .groups = "drop")
+      year_current <- year(month_current)
+      ytd_current_start <- ymd(paste0(year_current, "-01-01"))
+      ytd_current_end <- month_current
       
-      month_previous_year_count <- data |>
-        filter(date_reg == month_previous_year) |>
-        group_by(!!group_col) |>
-        summarise(count_previous_year = sum(count), .groups = "drop")
+      ytd_previous_start <- ytd_current_start %m-% years(1)
+      ytd_previous_end <- ytd_current_end %m-% years(1)
       
-      ytd_current_count <- data |>
-        filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
-        group_by(!!group_col) |>
-        summarise(count_ytd_current = sum(count), .groups = "drop")
       
-      ytd_previous_count <- data |>
-        filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
-        group_by(!!group_col) |>
-        summarise(count_ytd_previous = sum(count), .groups = "drop")
+      # Define all the relevant dates.
+      month_current_name <- format(month_current, "%b %Y")
+      month_previous_name <- format(month_previous, "%b %Y")
+      month_previous_year_name <- format(month_previous_year, "%b %Y")
+      year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
+      year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
       
-      fuel_grouped_list() |>
-        left_join(month_current_count, by = c(rlang::as_string(group_col))) |>
-        mutate(count_current = replace_na(count_current, 0)) |>
-        full_join(month_previous_count, by = rlang::as_string(group_col)) |>
-        full_join(month_previous_year_count, by = rlang::as_string(group_col)) |>
-        full_join(ytd_current_count, by = rlang::as_string(group_col)) |>
-        full_join(ytd_previous_count, by = rlang::as_string(group_col)) |>
-        mutate(
-          across(starts_with("count"), \(x) replace_na(x, 0)),
-          growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
-          growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
-          growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
-        ) |>
-        arrange(desc(count_current)) |>
-        mutate(rank = row_number()) |>
-        select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
-        rename(
-          `Rank` := rank,
-          !!group_col_name := !!group_col,
-          !!month_current_name := count_current,
-          !!month_previous_name := count_previous,
-          `Growth (MoM)` := growth_MoM,
-          !!month_previous_year_name := count_previous_year,
-          `Growth (YoY)` := growth_YoY,
-          !!year_current_name := count_ytd_current,
-          !!year_previous_name := count_ytd_previous,
-          `Growth (YTD)` := growth_YTD
-        ) 
+      if (group_col == "model"){
+        month_current_count <- data |>
+          filter(date_reg == month_current) |>
+          group_by(maker, !!group_col) |>
+          summarise(count_current = sum(count), .groups = "drop")
+        
+        month_previous_count <- data |>
+          filter(date_reg == month_previous) |>
+          group_by(maker, !!group_col) |>
+          summarise(count_previous = sum(count), .groups = "drop")
+        
+        month_previous_year_count <- data |>
+          filter(date_reg == month_previous_year) |>
+          group_by(maker, !!group_col) |>
+          summarise(count_previous_year = sum(count), .groups = "drop")
+        
+        ytd_current_count <- data |>
+          filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
+          group_by(maker, !!group_col) |>
+          summarise(count_ytd_current = sum(count), .groups = "drop")
+        
+        ytd_previous_count <- data |>
+          filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
+          group_by(maker, !!group_col) |>
+          summarise(count_ytd_previous = sum(count), .groups = "drop")
+        
+        model_list() |>
+          left_join(month_current_count, by = c("maker", "model")) |>
+          mutate(count_current = replace_na(count_current, 0)) |>
+          full_join(month_previous_count, by = c("maker", rlang::as_string(group_col))) |>
+          full_join(month_previous_year_count, by = c("maker", rlang::as_string(group_col))) |>
+          full_join(ytd_current_count, by = c("maker", rlang::as_string(group_col))) |>
+          full_join(ytd_previous_count, by = c("maker", rlang::as_string(group_col))) |>
+          mutate(
+            across(starts_with("count"), \(x) replace_na(x, 0)),
+            growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
+            growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
+            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
+          ) |>
+          arrange(desc(count_current)) |>
+          mutate(rank = row_number()) |>
+          select(rank, maker, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
+          rename(
+            `Rank` := rank,
+            `Make` := maker,
+            !!group_col_name := !!group_col,
+            !!month_current_name := count_current,
+            !!month_previous_name := count_previous,
+            `Growth (MoM)` := growth_MoM,
+            !!month_previous_year_name := count_previous_year,
+            `Growth (YoY)` := growth_YoY,
+            !!year_current_name := count_ytd_current,
+            !!year_previous_name := count_ytd_previous,
+            `Growth (YTD)` := growth_YTD
+          ) 
+      } else if (group_col == "maker") {
+        month_current_count <- data |>
+          filter(date_reg == month_current) |>
+          group_by(!!group_col) |>
+          summarise(count_current = sum(count), .groups = "drop")
+        
+        month_previous_count <- data |>
+          filter(date_reg == month_previous) |>
+          group_by(!!group_col) |>
+          summarise(count_previous = sum(count), .groups = "drop")
+        
+        month_previous_year_count <- data |>
+          filter(date_reg == month_previous_year) |>
+          group_by(!!group_col) |>
+          summarise(count_previous_year = sum(count), .groups = "drop")
+        
+        ytd_current_count <- data |>
+          filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
+          group_by(!!group_col) |>
+          summarise(count_ytd_current = sum(count), .groups = "drop")
+        
+        ytd_previous_count <- data |>
+          filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
+          group_by(!!group_col) |>
+          summarise(count_ytd_previous = sum(count), .groups = "drop")
+        
+        maker_list() |>
+          left_join(month_current_count, by = c(rlang::as_string(group_col))) |>
+          mutate(count_current = replace_na(count_current, 0)) |>
+          full_join(month_previous_count, by = rlang::as_string(group_col)) |>
+          full_join(month_previous_year_count, by = rlang::as_string(group_col)) |>
+          full_join(ytd_current_count, by = rlang::as_string(group_col)) |>
+          full_join(ytd_previous_count, by = rlang::as_string(group_col)) |>
+          mutate(
+            across(starts_with("count"), \(x) replace_na(x, 0)),
+            growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
+            growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
+            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
+          ) |>
+          arrange(desc(count_current)) |>
+          mutate(rank = row_number()) |>
+          select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
+          rename(
+            `Rank` := rank,
+            !!group_col_name := !!group_col,
+            !!month_current_name := count_current,
+            !!month_previous_name := count_previous,
+            `Growth (MoM)` := growth_MoM,
+            !!month_previous_year_name := count_previous_year,
+            `Growth (YoY)` := growth_YoY,
+            !!year_current_name := count_ytd_current,
+            !!year_previous_name := count_ytd_previous,
+            `Growth (YTD)` := growth_YTD
+          ) 
+      } else {
+        month_current_count <- data |>
+          filter(date_reg == month_current) |>
+          group_by(!!group_col) |>
+          summarise(count_current = sum(count), .groups = "drop")
+        
+        month_previous_count <- data |>
+          filter(date_reg == month_previous) |>
+          group_by(!!group_col) |>
+          summarise(count_previous = sum(count), .groups = "drop")
+        
+        month_previous_year_count <- data |>
+          filter(date_reg == month_previous_year) |>
+          group_by(!!group_col) |>
+          summarise(count_previous_year = sum(count), .groups = "drop")
+        
+        ytd_current_count <- data |>
+          filter(date_reg >= ytd_current_start & date_reg <= ytd_current_end) |>
+          group_by(!!group_col) |>
+          summarise(count_ytd_current = sum(count), .groups = "drop")
+        
+        ytd_previous_count <- data |>
+          filter(date_reg >= ytd_previous_start & date_reg <= ytd_previous_end) |>
+          group_by(!!group_col) |>
+          summarise(count_ytd_previous = sum(count), .groups = "drop")
+        
+        fuel_grouped_list() |>
+          left_join(month_current_count, by = c(rlang::as_string(group_col))) |>
+          mutate(count_current = replace_na(count_current, 0)) |>
+          full_join(month_previous_count, by = rlang::as_string(group_col)) |>
+          full_join(month_previous_year_count, by = rlang::as_string(group_col)) |>
+          full_join(ytd_current_count, by = rlang::as_string(group_col)) |>
+          full_join(ytd_previous_count, by = rlang::as_string(group_col)) |>
+          mutate(
+            across(starts_with("count"), \(x) replace_na(x, 0)),
+            growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
+            growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
+            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
+          ) |>
+          arrange(desc(count_current)) |>
+          mutate(rank = row_number()) |>
+          select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
+          rename(
+            `Rank` := rank,
+            !!group_col_name := !!group_col,
+            !!month_current_name := count_current,
+            !!month_previous_name := count_previous,
+            `Growth (MoM)` := growth_MoM,
+            !!month_previous_year_name := count_previous_year,
+            `Growth (YoY)` := growth_YoY,
+            !!year_current_name := count_ytd_current,
+            !!year_previous_name := count_ytd_previous,
+            `Growth (YTD)` := growth_YTD
+          ) 
+      }
     }
   }
   
@@ -648,132 +656,224 @@ server <- function(input, output, session) {
     
     data <- filtered_data()
     
-    if (group_col == "model"){
-      
-      monthly_data <- function(month_num, year_num){
-        data <- data |>
-          filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-          group_by(maker, !!group_col) |>
-          summarise(count_current = sum(count), .groups = "drop")
+    if (nrow(data) == 0) return(tibble())
+    
+      if (group_col == "model"){
         
-        colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
+        # Filter the entire year's data ONCE
+        year_data <- data |>
+          filter(year(date_reg) == input$year_selected) |>
+          mutate(
+            month_lbl = format(date_reg, "%b %Y")
+          )
         
-        data <- data |> rename(!!colname := count_current)
+        # Group and summarize by maker, group_col, and month
+        monthly_summary <- year_data |>
+          group_by(maker, !!group_col, month_lbl) |>
+          summarise(count_current = sum(count, na.rm = TRUE), .groups = "drop")
         
-        return(data)
+        # Ensure all 12 months exist for every maker/group combination BEFORE pivoting
+        all_months <- format(as.Date(paste(input$year_selected, 1:12, 1, sep="-")), "%b %Y")
+        
+        wide_data <- monthly_summary |>
+          # Complete the grid so missing months get explicit 0s
+          complete(
+            nesting(maker, !!group_col), 
+            month_lbl = all_months
+          ) |>
+          pivot_wider(
+            names_from = month_lbl, 
+            values_from = count_current
+          )
+        
+        # Calculate Total, join with the base model list, and select
+        year_colname <- paste0("Total ", input$year_selected)
+        
+        data <- model_list_annual() |>
+          left_join(wide_data, by = c("maker", rlang::as_string(group_col))) |>
+          mutate(across(all_of(all_months), ~ replace_na(.x, 0))) |>
+          mutate(
+            !!year_colname := rowSums(across(all_of(all_months)), na.rm = TRUE)
+          ) |>
+          arrange(desc(!!sym(year_colname))) |>
+          mutate(Rank = row_number()) |>
+          select(
+            Rank,
+            Make = maker,
+            !!group_col_name := !!group_col,
+            all_of(all_months),
+            !!sym(year_colname)
+          )
+        
+        # monthly_data <- function(month_num, year_num){
+        #   data <- data |>
+        #     filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
+        #     group_by(maker, !!group_col) |>
+        #     summarise(count_current = sum(count), .groups = "drop")
+        # 
+        #   colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
+        # 
+        #   data <- data |> rename(!!colname := count_current)
+        # 
+        #   return(data)
+        # }
+        # 
+        # Jan_Count <- monthly_data(1, input$year_selected)
+        # Feb_Count <- monthly_data(2, input$year_selected)
+        # Mar_Count <- monthly_data(3, input$year_selected)
+        # Apr_Count <- monthly_data(4, input$year_selected)
+        # May_Count <- monthly_data(5, input$year_selected)
+        # Jun_Count <- monthly_data(6, input$year_selected)
+        # Jul_Count <- monthly_data(7, input$year_selected)
+        # Aug_Count <- monthly_data(8, input$year_selected)
+        # Sep_Count <- monthly_data(9, input$year_selected)
+        # Oct_Count <- monthly_data(10, input$year_selected)
+        # Nov_Count <- monthly_data(11, input$year_selected)
+        # Dec_Count <- monthly_data(12, input$year_selected)
+        # 
+        # Year_Total_Count <- data |>
+        #   filter(year(date_reg) == input$year_selected) |>
+        #   group_by(maker, !!group_col) |>
+        #   summarise(count_current = sum(count), .groups = "drop")
+        # 
+        # year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
+        # 
+        # Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
+        # 
+        # data <- model_list_annual() |>
+        #   left_join(Year_Total_Count, by = c("maker", "model")) |>
+        #   full_join(Jan_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Feb_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Mar_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Apr_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(May_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Jun_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Jul_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Aug_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Sep_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Oct_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Nov_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   full_join(Dec_Count, by = c("maker", rlang::as_string(group_col))) |>
+        #   arrange(desc('Total')) |>
+        #   mutate(rank = row_number()) |>
+        #   select(rank, maker, !!group_col,
+        #          all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        #                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
+        #   ) |>
+        #   rename(
+        #     `Rank` := rank,
+        #     `Make` := maker,
+        #     !!group_col_name := !!group_col,
+        #   )
+      } else if (group_col == "maker") {
+        
+        # Filter the entire year's data ONCE
+        year_data <- data |>
+          filter(year(date_reg) == input$year_selected) |>
+          mutate(
+            month_lbl = format(date_reg, "%b %Y")
+          )
+        
+        # Group and summarize by group_col, and month
+        monthly_summary <- year_data |>
+          group_by(!!group_col, month_lbl) |>
+          summarise(count_current = sum(count, na.rm = TRUE), .groups = "drop")
+        
+        # Ensure all 12 months exist for every maker/group combination BEFORE pivoting
+        all_months <- format(as.Date(paste(input$year_selected, 1:12, 1, sep="-")), "%b %Y")
+        
+        wide_data <- monthly_summary |>
+          # Complete the grid so missing months get explicit 0s
+          complete(
+            !!group_col, 
+            month_lbl = all_months
+          ) |>
+          pivot_wider(
+            names_from = month_lbl, 
+            values_from = count_current
+          )
+        
+        # Calculate Total, join with the base model list, and select
+        year_colname <- paste0("Total ", input$year_selected)
+        
+        data <- model_list_annual() |>
+          distinct(!!group_col) |>
+          left_join(wide_data, by = c(rlang::as_string(group_col))) |>
+          mutate(across(all_of(all_months), ~ replace_na(.x, 0))) |>
+          mutate(
+            !!year_colname := rowSums(across(all_of(all_months)), na.rm = TRUE)
+          ) |>
+          arrange(desc(!!sym(year_colname))) |>
+          mutate(Rank = row_number()) |>
+          select(
+            Rank,
+            !!group_col_name := !!group_col,
+            all_of(all_months),
+            !!sym(year_colname)
+          )
+        
+        # monthly_data <- function(month_num, year_num){
+        #   data <- data |>
+        #     filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
+        #     group_by(!!group_col) |>
+        #     summarise(count_current = sum(count), .groups = "drop")
+        #   
+        #   colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
+        #   
+        #   data <- data |> rename(!!colname := count_current)
+        #   
+        #   return(data)
+        # }
+        # 
+        # Jan_Count <- monthly_data(1, input$year_selected)
+        # Feb_Count <- monthly_data(2, input$year_selected)
+        # Mar_Count <- monthly_data(3, input$year_selected)
+        # Apr_Count <- monthly_data(4, input$year_selected)
+        # May_Count <- monthly_data(5, input$year_selected)
+        # Jun_Count <- monthly_data(6, input$year_selected)
+        # Jul_Count <- monthly_data(7, input$year_selected)
+        # Aug_Count <- monthly_data(8, input$year_selected)
+        # Sep_Count <- monthly_data(9, input$year_selected)
+        # Oct_Count <- monthly_data(10, input$year_selected)
+        # Nov_Count <- monthly_data(11, input$year_selected)
+        # Dec_Count <- monthly_data(12, input$year_selected)
+        # 
+        # Year_Total_Count <- data |>
+        #   filter(year(date_reg) == input$year_selected) |>
+        #   group_by(!!group_col) |>
+        #   summarise(count_current = sum(count), .groups = "drop")
+        # 
+        # year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
+        # 
+        # Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
+        # 
+        # data <- maker_list_annual() |>
+        #   left_join(Year_Total_Count, by = c("maker")) |>
+        #   full_join(Jan_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Feb_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Mar_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Apr_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(May_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Jun_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Jul_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Aug_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Sep_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Oct_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Nov_Count, by = c(rlang::as_string(group_col))) |>
+        #   full_join(Dec_Count, by = c(rlang::as_string(group_col))) |>
+        #   arrange(desc('Total')) |>
+        #   mutate(rank = row_number()) |>
+        #   select(rank, !!group_col,
+        #          all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+        #                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
+        #   ) |>
+        #   rename(
+        #     `Rank` := rank,
+        #     !!group_col_name := !!group_col,
+        #   )
+        
+      } else {
       }
-      
-      Jan_Count <- monthly_data(1, input$year_selected)
-      Feb_Count <- monthly_data(2, input$year_selected)
-      Mar_Count <- monthly_data(3, input$year_selected)
-      Apr_Count <- monthly_data(4, input$year_selected)
-      May_Count <- monthly_data(5, input$year_selected)
-      Jun_Count <- monthly_data(6, input$year_selected)
-      Jul_Count <- monthly_data(7, input$year_selected)
-      Aug_Count <- monthly_data(8, input$year_selected)
-      Sep_Count <- monthly_data(9, input$year_selected)
-      Oct_Count <- monthly_data(10, input$year_selected)
-      Nov_Count <- monthly_data(11, input$year_selected)
-      Dec_Count <- monthly_data(12, input$year_selected)
-      
-      Year_Total_Count <- data |>
-        filter(year(date_reg) == input$year_selected) |>
-        group_by(maker, !!group_col) |>
-        summarise(count_current = sum(count), .groups = "drop")
-      
-      year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-      
-      Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-      
-      data <- model_list_annual() |>
-        left_join(Year_Total_Count, by = c("maker", "model")) |>
-        full_join(Jan_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Feb_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Mar_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Apr_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(May_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Jun_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Jul_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Aug_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Sep_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Oct_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Nov_Count, by = c("maker", rlang::as_string(group_col))) |>
-        full_join(Dec_Count, by = c("maker", rlang::as_string(group_col))) |>
-        arrange(desc('Total')) |>
-        mutate(rank = row_number()) |>
-        select(rank, maker, !!group_col,
-               all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-        ) |>
-        rename(
-          `Rank` := rank,
-          `Make` := maker,
-          !!group_col_name := !!group_col,
-        )
-    } else if (group_col == "maker") {
-      
-      monthly_data <- function(month_num, year_num){
-        data <- data |>
-          filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-          group_by(!!group_col) |>
-          summarise(count_current = sum(count), .groups = "drop")
-        
-        colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        
-        data <- data |> rename(!!colname := count_current)
-        
-        return(data)
-      }
-      
-      Jan_Count <- monthly_data(1, input$year_selected)
-      Feb_Count <- monthly_data(2, input$year_selected)
-      Mar_Count <- monthly_data(3, input$year_selected)
-      Apr_Count <- monthly_data(4, input$year_selected)
-      May_Count <- monthly_data(5, input$year_selected)
-      Jun_Count <- monthly_data(6, input$year_selected)
-      Jul_Count <- monthly_data(7, input$year_selected)
-      Aug_Count <- monthly_data(8, input$year_selected)
-      Sep_Count <- monthly_data(9, input$year_selected)
-      Oct_Count <- monthly_data(10, input$year_selected)
-      Nov_Count <- monthly_data(11, input$year_selected)
-      Dec_Count <- monthly_data(12, input$year_selected)
-      
-      Year_Total_Count <- data |>
-        filter(year(date_reg) == input$year_selected) |>
-        group_by(!!group_col) |>
-        summarise(count_current = sum(count), .groups = "drop")
-      
-      year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-      
-      Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-      
-      data <- maker_list_annual() |>
-        left_join(Year_Total_Count, by = c("maker")) |>
-        full_join(Jan_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Feb_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Mar_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Apr_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(May_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Jun_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Jul_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Aug_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Sep_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Oct_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Nov_Count, by = c(rlang::as_string(group_col))) |>
-        full_join(Dec_Count, by = c(rlang::as_string(group_col))) |>
-        arrange(desc('Total')) |>
-        mutate(rank = row_number()) |>
-        select(rank, !!group_col,
-               all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-        ) |>
-        rename(
-          `Rank` := rank,
-          !!group_col_name := !!group_col,
-        )
-      
-    } else {
-    }
     return(data)
   }
   
@@ -781,89 +881,22 @@ server <- function(input, output, session) {
   make_annual_tiv <- function(data, model) {
     data <- filtered_data()
     
-    if (model == "yes") {
-      monthly_data <- function(month_num, year_num){
-        data <- data |>
-          mutate(maker = "All Makes", model = "All Models") |>
-          filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-          group_by(maker, model) |>
-          summarise(count_current = sum(count), .groups = "drop")
-        
-        colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        
-        data <- data |> rename(!!colname := count_current)
-        
-        return(data)
-      }
+    if (nrow(data) == 0) return(tibble())
     
-    Jan_Count <- monthly_data(1, input$year_selected)
-    Feb_Count <- monthly_data(2, input$year_selected)
-    Mar_Count <- monthly_data(3, input$year_selected)
-    Apr_Count <- monthly_data(4, input$year_selected)
-    May_Count <- monthly_data(5, input$year_selected)
-    Jun_Count <- monthly_data(6, input$year_selected)
-    Jul_Count <- monthly_data(7, input$year_selected)
-    Aug_Count <- monthly_data(8, input$year_selected)
-    Sep_Count <- monthly_data(9, input$year_selected)
-    Oct_Count <- monthly_data(10, input$year_selected)
-    Nov_Count <- monthly_data(11, input$year_selected)
-    Dec_Count <- monthly_data(12, input$year_selected)
-  
-    Year_Total_Count <- data |>
-      mutate(maker = "All Makes", model = "All Models") |>
-      filter(year(date_reg) == input$year_selected) |>
-      group_by(maker, model) |>
-      summarise(count_current = sum(count), .groups = "drop")
-    
-    year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-    
-    Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-    
-    maker_list_annual_tiv <- maker_list_annual() |>
-      mutate(maker = "All Makes", model = "All Models")
-    
-    maker_list_annual_tiv <- head(maker_list_annual_tiv, 1)
-    
-    data <- maker_list_annual_tiv |>
-      left_join(Year_Total_Count, by = c("maker", "model")) |>
-      full_join(Jan_Count, by = c("maker", "model")) |>
-      full_join(Feb_Count, by = c("maker", "model")) |>
-      full_join(Mar_Count, by = c("maker", "model")) |>
-      full_join(Apr_Count, by = c("maker", "model")) |>
-      full_join(May_Count, by = c("maker", "model")) |>
-      full_join(Jun_Count, by = c("maker", "model")) |>
-      full_join(Jul_Count, by = c("maker", "model")) |>
-      full_join(Aug_Count, by = c("maker", "model")) |>
-      full_join(Sep_Count, by = c("maker", "model")) |>
-      full_join(Oct_Count, by = c("maker", "model")) |>
-      full_join(Nov_Count, by = c("maker", "model")) |>
-      full_join(Dec_Count, by = c("maker", "model")) |>
-      arrange(desc('Total')) |>
-      mutate(rank = row_number()) |>
-      select(rank, maker, model,
-             all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-      ) |>
-      rename(
-        `Rank` := rank,
-        `Make` := maker,
-        `Model` := model,
-      )  
-    
-    } else {
-      monthly_data <- function(month_num, year_num){
-        data <- data |>
-          mutate(maker = "All Makes") |>
-          filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-          group_by(maker) |>
-          summarise(count_current = sum(count), .groups = "drop")
-        
-        colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        
-        data <- data |> rename(!!colname := count_current)
-        
-        return(data)
-      }
+      if (model == "yes") {
+        monthly_data <- function(month_num, year_num){
+          data <- data |>
+            mutate(maker = "All Makes", model = "All Models") |>
+            filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
+            group_by(maker, model) |>
+            summarise(count_current = sum(count), .groups = "drop")
+          
+          colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
+          
+          data <- data |> rename(!!colname := count_current)
+          
+          return(data)
+        }
       
       Jan_Count <- monthly_data(1, input$year_selected)
       Feb_Count <- monthly_data(2, input$year_selected)
@@ -877,11 +910,11 @@ server <- function(input, output, session) {
       Oct_Count <- monthly_data(10, input$year_selected)
       Nov_Count <- monthly_data(11, input$year_selected)
       Dec_Count <- monthly_data(12, input$year_selected)
-      
+    
       Year_Total_Count <- data |>
-        mutate(maker = "All Makes") |>
+        mutate(maker = "All Makes", model = "All Models") |>
         filter(year(date_reg) == input$year_selected) |>
-        group_by(maker) |>
+        group_by(maker, model) |>
         summarise(count_current = sum(count), .groups = "drop")
       
       year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
@@ -889,37 +922,105 @@ server <- function(input, output, session) {
       Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
       
       maker_list_annual_tiv <- maker_list_annual() |>
-        mutate(maker = "All Makes")
+        mutate(maker = "All Makes", model = "All Models")
       
       maker_list_annual_tiv <- head(maker_list_annual_tiv, 1)
       
       data <- maker_list_annual_tiv |>
-        left_join(Year_Total_Count, by = c("maker")) |>
-        full_join(Jan_Count, by = c("maker")) |>
-        full_join(Feb_Count, by = c("maker")) |>
-        full_join(Mar_Count, by = c("maker")) |>
-        full_join(Apr_Count, by = c("maker")) |>
-        full_join(May_Count, by = c("maker")) |>
-        full_join(Jun_Count, by = c("maker")) |>
-        full_join(Jul_Count, by = c("maker")) |>
-        full_join(Aug_Count, by = c("maker")) |>
-        full_join(Sep_Count, by = c("maker")) |>
-        full_join(Oct_Count, by = c("maker")) |>
-        full_join(Nov_Count, by = c("maker")) |>
-        full_join(Dec_Count, by = c("maker")) |>
+        left_join(Year_Total_Count, by = c("maker", "model")) |>
+        full_join(Jan_Count, by = c("maker", "model")) |>
+        full_join(Feb_Count, by = c("maker", "model")) |>
+        full_join(Mar_Count, by = c("maker", "model")) |>
+        full_join(Apr_Count, by = c("maker", "model")) |>
+        full_join(May_Count, by = c("maker", "model")) |>
+        full_join(Jun_Count, by = c("maker", "model")) |>
+        full_join(Jul_Count, by = c("maker", "model")) |>
+        full_join(Aug_Count, by = c("maker", "model")) |>
+        full_join(Sep_Count, by = c("maker", "model")) |>
+        full_join(Oct_Count, by = c("maker", "model")) |>
+        full_join(Nov_Count, by = c("maker", "model")) |>
+        full_join(Dec_Count, by = c("maker", "model")) |>
         arrange(desc('Total')) |>
         mutate(rank = row_number()) |>
-        select(rank, maker,
+        select(rank, maker, model,
                all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
                               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
         ) |>
         rename(
           `Rank` := rank,
           `Make` := maker,
+          `Model` := model,
         )  
       
-    }
-  
+      } else {
+        monthly_data <- function(month_num, year_num){
+          data <- data |>
+            mutate(maker = "All Makes") |>
+            filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
+            group_by(maker) |>
+            summarise(count_current = sum(count), .groups = "drop")
+          
+          colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
+          
+          data <- data |> rename(!!colname := count_current)
+          
+          return(data)
+        }
+        
+        Jan_Count <- monthly_data(1, input$year_selected)
+        Feb_Count <- monthly_data(2, input$year_selected)
+        Mar_Count <- monthly_data(3, input$year_selected)
+        Apr_Count <- monthly_data(4, input$year_selected)
+        May_Count <- monthly_data(5, input$year_selected)
+        Jun_Count <- monthly_data(6, input$year_selected)
+        Jul_Count <- monthly_data(7, input$year_selected)
+        Aug_Count <- monthly_data(8, input$year_selected)
+        Sep_Count <- monthly_data(9, input$year_selected)
+        Oct_Count <- monthly_data(10, input$year_selected)
+        Nov_Count <- monthly_data(11, input$year_selected)
+        Dec_Count <- monthly_data(12, input$year_selected)
+        
+        Year_Total_Count <- data |>
+          mutate(maker = "All Makes") |>
+          filter(year(date_reg) == input$year_selected) |>
+          group_by(maker) |>
+          summarise(count_current = sum(count), .groups = "drop")
+        
+        year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
+        
+        Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
+        
+        maker_list_annual_tiv <- maker_list_annual() |>
+          mutate(maker = "All Makes")
+        
+        maker_list_annual_tiv <- head(maker_list_annual_tiv, 1)
+        
+        data <- maker_list_annual_tiv |>
+          left_join(Year_Total_Count, by = c("maker")) |>
+          full_join(Jan_Count, by = c("maker")) |>
+          full_join(Feb_Count, by = c("maker")) |>
+          full_join(Mar_Count, by = c("maker")) |>
+          full_join(Apr_Count, by = c("maker")) |>
+          full_join(May_Count, by = c("maker")) |>
+          full_join(Jun_Count, by = c("maker")) |>
+          full_join(Jul_Count, by = c("maker")) |>
+          full_join(Aug_Count, by = c("maker")) |>
+          full_join(Sep_Count, by = c("maker")) |>
+          full_join(Oct_Count, by = c("maker")) |>
+          full_join(Nov_Count, by = c("maker")) |>
+          full_join(Dec_Count, by = c("maker")) |>
+          arrange(desc('Total')) |>
+          mutate(rank = row_number()) |>
+          select(rank, maker,
+                 all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
+          ) |>
+          rename(
+            `Rank` := rank,
+            `Make` := maker,
+          )  
+        
+      }
     return(data)
   }
   
@@ -1056,6 +1157,14 @@ server <- function(input, output, session) {
   
   # ---- Output Plotly Function ----
   plot_chart_total <- function(agg_choice) {
+    
+    if (nrow(car_data) == 0) {
+      return(
+        plotly::plotly_empty(type = "scatter", mode = "lines") %>%
+          layout(title = paste("No data available for the selected filters"))
+      )
+    }
+    
     monthly_trends_data_ttl <- car_data |>
       mutate(month = date_reg) |>
       group_by(month) |>
@@ -1104,6 +1213,13 @@ server <- function(input, output, session) {
   
   plot_chart <- function(df, group_col, group_col_name, agg_choice) {
     df <- filtered_data() # call the reactive to get the data frame.
+    
+    if (nrow(df) == 0) {
+      return(
+        plotly::plotly_empty(type = "scatter", mode = "lines") %>%
+          layout(title = paste("No data available for the selected filters"))
+      )
+    }
     
     group_col_name_sym <- rlang::as_name(rlang::ensym(group_col))
     
@@ -1308,35 +1424,35 @@ server <- function(input, output, session) {
   })
   
   # ---- Reactive summary ----
-  summary_data <- reactive(make_summary(car_data, "maker", "Make"))
-  summary_data_model <- reactive(make_summary(car_data, "model", "Model"))
-  summary_data_fuel <- reactive(make_summary(car_data, "fuel_grouped", "Fuel Type"))
+  summary_data          <- reactive(make_summary(car_data, "maker", "Make"))
+  summary_data_model    <- reactive(make_summary(car_data, "model", "Model"))
+  summary_data_fuel     <- reactive(make_summary(car_data, "fuel_grouped", "Fuel Type"))
   
-  annual_data <- reactive(make_annual(car_data, "maker", "Make"))
-  annual_data_model <- reactive(make_annual(car_data, "model", "Model"))
-  annual_data_tiv <- reactive(make_annual_tiv(car_data, "no"))
+  annual_data           <- reactive(make_annual(car_data, "maker", "Make"))
+  annual_data_model     <- reactive(make_annual(car_data, "model", "Model"))
+  annual_data_tiv       <- reactive(make_annual_tiv(car_data, "no"))
   annual_data_tiv_model <- reactive(make_annual_tiv(car_data, "yes"))
   
   # ---- Output 1: DataTable ----
   output$summary_table_total    <- renderDT(data_table_TIV(summary_total))
   
   # Version that doesn't show error if there's no data when filtered (but creates a new error lol)
-  output$summary_table          <- renderDT({
-      validate(
-        need(nrow(summary_data()) > 0, "No data available for the selected filters")
-      )
-
-      data_table(summary_data)
+  safe_renderDT <- function(data_reactive, table_fun, msg = "No data available for the selected filters") {
+    renderDT({
+      df <- data_reactive()
+      validate(need(nrow(df) > 0, msg))
+      table_fun(data_reactive)   # pass the reactive if contains data
     }, server = FALSE)
-
-  # output$summary_table          <- renderDT(data_table(summary_data), server = FALSE)
-  output$summary_table_model    <- renderDT(data_table(summary_data_model), server = FALSE)
-  output$summary_table_fuel     <- renderDT(data_table(summary_data_fuel), server = FALSE)
+  }
   
-  output$annual_table           <- renderDT(data_table_annual(annual_data), server = FALSE)
-  output$annual_table_model     <- renderDT(data_table_annual(annual_data_model), server = FALSE)
-  output$annual_table_tiv       <- renderDT(data_table_annual_tiv(annual_data_tiv), server = FALSE)
-  output$annual_table_model_tiv <- renderDT(data_table_annual_tiv(annual_data_tiv_model), server = FALSE)
+  output$summary_table            <- safe_renderDT(summary_data, data_table)
+  output$summary_table_model      <- safe_renderDT(summary_data_model, data_table)
+  output$summary_table_fuel       <- safe_renderDT(summary_data_fuel, data_table)
+  
+  output$annual_table             <- safe_renderDT(annual_data, data_table_annual)
+  output$annual_table_model       <- safe_renderDT(annual_data_model, data_table_annual)
+  output$annual_table_tiv         <- safe_renderDT(annual_data_tiv, data_table_annual_tiv)
+  output$annual_table_model_tiv   <- safe_renderDT(annual_data_tiv_model, data_table_annual_tiv)
   
   # ---- Output 2: Plotly Trend ----
   output$trend_plot_total       <- renderPlotly(plot_chart_total(input$agg_level_ttl))

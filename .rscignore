@@ -1,4 +1,6 @@
+Backups/
 Scripts/
+Data/car_data_sum.csv
 .git
 .Rproj.user
 .gitignore
