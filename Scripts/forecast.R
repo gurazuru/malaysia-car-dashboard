@@ -11,12 +11,12 @@ setwd("C:/R Projects/JPJ_Car_Viz")
 cutoffs <- as.Date(c('2024-12-31', 
                      '2025-01-31', '2025-02-28', '2025-03-31', '2025-04-30', '2025-05-31', '2025-06-30', 
                      '2025-07-31', '2025-08-31', '2025-09-30', '2025-10-31', '2025-11-30', '2025-12-31', 
-                     '2026-01-31', '2026-02-28', '2026-03-30'
+                     '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30'
 ))
 
 # M+1 to forecast:
 Next_FC_Year = 2026
-Next_FC_Month = 5
+Next_FC_Month = 6
 
 # ---- Load Public Holidays Data ----
 PH_data <- read_excel("Data/Public_Holidays_MY_2010-2035.xlsx") |>
@@ -198,6 +198,8 @@ tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 plot(m7, forecast7)
 prophet_plot_components(m7, forecast7)
 
+# Save the actual trained model architecture
+saveRDS(m7, "Data/prophet_model_m7.rds")
 
 # ---- Model 8: Capped Growth ----
 cap_m8 = 2500 # set daily carrying capacity

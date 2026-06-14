@@ -30,14 +30,14 @@ list_suvb       <- c("WR-V", "HR-V", "Ativa", "X50", "CX-3", "CX-5", "CX-30", "C
                      "XV", "Omoda 5", "Tiggo", "ASX", "Forester", "Atto 3", "Kicks", "iCaur 03",
                      "iCaur V23", "B10", "Traz", "Atto 2", "C-HR", "Captur", "2008", "SX4", "Jimny",
                      "Haval H1", "Haval M4", "GS3", "Jimny Sierra", "Ecosport", "Haval H2", "Kona",
-                     "Jaecoo J5", "QV-E", "S5", "Xforce", "e:N1")
+                     "Jaecoo J5", "QV-E", "S5", "Xforce", "e:N1", "Yaris Cross")
 
 list_suvcd      <- c("CR-V", "X70", "X-Trail", "Harrier", "Jaecoo J7", "Jaecoo J8", "X90", 
                      "Fortuner", "CX-8", "CX-9", "e.MAS 7", "3008", "Outlander", "Model Y", "Omoda 9", 
                      "Sealion", "Captiva", "Tucson", "7X", "C10", "Sportage", "Pajero", "Santa Fe",
                      "Haval H6", "Sorento", "Dashing", "FJ Cruiser", "Kuga", "RAV4", "Grand Vitara",
                      "Murano", "G6", "Tank 300", "Escape", "Everest", "MU-X", "Wrangler", "VT9",
-                     "CX-60", "CX-7", "Koleos", "MG HS", "ZS", "ZS EV")
+                     "CX-60", "CX-7", "Koleos", "MG HS", "ZS", "ZS EV", "T2")
 
 list_mpv        <- c("Alza", "Aruz", "Xpander", "Veloz", "Exora", "Alphard",
                      "Vellfire", "Livina", "Grand Livina", "Avanza", "Innova", "Estima", "BR-V",
@@ -45,7 +45,7 @@ list_mpv        <- c("Alza", "Aruz", "Xpander", "Veloz", "Exora", "Alphard",
                      "Innova Zenix", "9", "Carnival", "Stream", "Voxy", "Eastar", "Sienta", "STEPWGN",
                      "Freed", "Staria", "Biante", "G10", "Grandis", "Citra II Rondo", "Noah", "8",
                      "D9", "Touran", "5", "Stavic", "009", "Orlando", "Elysion", "Matrix", "Elgrand",
-                     "Previa", "Sharan", "X9")
+                     "Previa", "Sharan", "X9", "Wey G9")
 
 list_pickup     <- c("Hilux", "Triton", "D-Max", "Ranger", "Navara", "BT-50", "Invader", "Colorado", 
                      "Frontier", "Vigus", "Wingle")

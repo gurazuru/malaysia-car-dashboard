@@ -10,8 +10,8 @@ library(bslib)
 library(memoise)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
-data_asof = "data as of 30th April 2026" # Update latest description here
-Next_FC_Text = "May 2026 Forecast"
+data_asof = "data as of 31st May 2026" # Update latest description here
+Next_FC_Text = "June 2026 Forecast"
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("Data/car_data_sum.csv") |>
@@ -76,6 +76,7 @@ tiv_plot_df <- tiv_monthly |>
 # ---- UI ----
 ui <- page_fluid(
   tags$head(
+    tags$link(rel = "canonical", href = "https://gurazuru.github.io/malaysia-car-dashboard/"),
     tags$style(HTML("
       body {
         zoom: 95%;
@@ -85,10 +86,9 @@ ui <- page_fluid(
     "))
   ),
   
-  titlePanel("Malaysia Total Industry Volume (Vehicle Registrations)"),
-  
-  tags$h5("This report provides an overview of vehicle registration trends in Malaysia, 
-           using JPJ data from data.gov.my.",
+  titlePanel("Malaysia JPJ Vehicle Registration Data Dashboard"),
+
+  tags$h5("An interactive dashboard visualizing Malaysia's total industry volume and JPJ vehicle registration trends. Sourced from data.gov.my.",
           style = "color: #555; margin-top: -2px;"),
   
   card(
@@ -280,7 +280,7 @@ ui <- page_fluid(
                col_widths = c(6, 6)
              )
     ),
-    tabPanel("By Make (Yearly)",
+    tabPanel("By Make (Full Year)",
              layout_columns(
                col_widths =  c(12),
                card(
@@ -293,25 +293,9 @@ ui <- page_fluid(
                  card_header("Monthly Vehicle Registrations Total"),
                  DTOutput("annual_table_tiv")
                )
-               # ,     
-               # card(
-               #   card_header(
-               #     div(
-               #       style = "display: flex; align-items: center; justify-content: space-between;",
-               #       "View as: ",
-               #       selectInput(
-               #         inputId = "agg_level_model",
-               #         label = NULL,
-               #         choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-               #         selected = "Monthly"
-               #       )
-               #     ) 
-               #   ),
-               #   # plotlyOutput("trend_plot_model") <-- will add later once the tables are final
-               # )
              )
     ),
-    tabPanel("By Model (Yearly)",
+    tabPanel("By Model (Full Year)",
              layout_columns(
                col_widths =  c(12),
                card(
@@ -324,22 +308,6 @@ ui <- page_fluid(
                  card_header("Monthly Vehicle Registrations Total"),
                  DTOutput("annual_table_model_tiv")
                )
-               # ,     
-               # card(
-               #   card_header(
-               #     div(
-               #       style = "display: flex; align-items: center; justify-content: space-between;",
-               #       "View as: ",
-               #       selectInput(
-               #         inputId = "agg_level_model",
-               #         label = NULL,
-               #         choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-               #         selected = "Monthly"
-               #       )
-               #     ) 
-               #   ),
-               #   # plotlyOutput("trend_plot_model") <-- will add later once the tables are final
-               # )
              )
     ),
   ),
@@ -419,7 +387,7 @@ server <- function(input, output, session) {
     
     return(df)
   })
-  model_list_annual <- reactive({     # this if for the "yearly" tab
+  model_list_annual <- reactive({     # this if for the "Full Year" tab
     df <- filtered_data() |>
       group_by(maker, model) |>
       filter(year(date_reg) == input$year_selected) |>
@@ -437,7 +405,7 @@ server <- function(input, output, session) {
     
     return(df)
   })  
-  maker_list_annual <- reactive({     # this if for the "yearly" tab
+  maker_list_annual <- reactive({     # this if for the "Full Year" tab
     df <- filtered_data() |>
       group_by(maker) |>
       filter(year(date_reg) == input$year_selected) |>

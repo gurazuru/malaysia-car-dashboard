@@ -1,9 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Malaysia Car Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  
+  <!-- Optimized Meta Tags for Search Engines -->
+  <title>Malaysia JPJ Vehicle Registration Data Dashboard | gurazuru</title>
+  <meta name="description" content="An interactive data science dashboard exploring Malaysia's total industry volume and JPJ vehicle registration trends. Sourced from data.gov.my." />
+  <link rel="canonical" href="https://gurazuru.github.io/malaysia-car-dashboard/" />
+
   <style>
     html, body {
       margin: 0;
@@ -16,12 +21,32 @@
       width: 100%;
       height: 100%;
     }
+    /* Hides the text from human users but lets Google read it */
+    .seo-context {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
   </style>
 </head>
 <body>
-  <iframe
-    src="https://gurazuru.shinyapps.io/jpj_car_viz/"
-    title="Malaysia Car Dashboard">
+
+  <!-- Hidden SEO Text Layer for Google Crawler -->
+  <div class="seo-context">
+    <h1>Malaysia Car Dashboard by gurazuru</h1>
+    <p>Welcome to the interactive vehicle registration visualization project. This data science dashboard tracks and analyzes official Malaysia JPJ data, automotive insights, and Total Industry Volume (TIV) trends.</p>
+    <p>Data is sourced cleanly from the official Portal Data Terbuka Malaysia (data.gov.my) to provide comprehensive updates on vehicle trends across the country.</p>
+    <p>If you are not redirected automatically, you can access the live application directly hosted at shinyapps via gurazuru.shinyapps.io/jpj_car_viz/.</p>
+  </div>
+
+  <!-- Your Live App -->
+  <iframe src="https://gurazuru.shinyapps.io/jpj_car_viz/" title="Malaysia JPJ Vehicle Registration Data Dashboard">
   </iframe>
+
 </body>
 </html>
