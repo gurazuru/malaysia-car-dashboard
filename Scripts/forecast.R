@@ -6,17 +6,18 @@ options(scipen = 999) # avoid using scientific notation.
 
 setwd("C:/R Projects/JPJ_Car_Viz")
 
-# To update every month
+# To update every month ----------------------------------------------------------------------------------
 # Cutoffs for validation
 cutoffs <- as.Date(c('2024-12-31', 
                      '2025-01-31', '2025-02-28', '2025-03-31', '2025-04-30', '2025-05-31', '2025-06-30', 
                      '2025-07-31', '2025-08-31', '2025-09-30', '2025-10-31', '2025-11-30', '2025-12-31', 
-                     '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30'
+                     '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30'
 ))
 
 # M+1 to forecast:
 Next_FC_Year = 2026
-Next_FC_Month = 6
+Next_FC_Month = 8
+# --------------------------------------------------------------------------------------------------------
 
 # ---- Load Public Holidays Data ----
 PH_data <- read_excel("Data/Public_Holidays_MY_2010-2035.xlsx") |>
@@ -258,33 +259,33 @@ m_trimmed <- prophet(car_df_trimmed)
 plot(m_trimmed, forecast_trimmed)
 
 
-# ---- Model Validation
-dfcv1 <- cross_validation(m1, cutoffs = cutoffs, horizon = 31, units = 'days')
+# ---- Model Validation (horizon must be equal to number of days in the m+1 forecasted month)
+dfcv1 <- cross_validation(m1, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp1 <- performance_metrics(dfcv1)
     
-dfcv2 <- cross_validation(m2, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv2 <- cross_validation(m2, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp2 <- performance_metrics(dfcv2)
 
-dfcv3 <- cross_validation(m3, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv3 <- cross_validation(m3, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp3 <- performance_metrics(dfcv3)
 
-dfcv4 <- cross_validation(m4, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv4 <- cross_validation(m4, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp4 <- performance_metrics(dfcv4)
 
-dfcv5 <- cross_validation(m5, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv5 <- cross_validation(m5, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp5 <- performance_metrics(dfcv5)
 
-dfcv6 <- cross_validation(m6, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv6 <- cross_validation(m6, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfcv6$y <- expm1(dfcv6$y)
 dfcv6$yhat <- expm1(dfcv6$yhat)
 dfcv6$yhat_lower <- expm1(dfcv6$yhat_lower)
 dfcv6$yhat_upper <- expm1(dfcv6$yhat_upper)
 dfp6 <- performance_metrics(dfcv6)
 
-dfcv7 <- cross_validation(m7, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv7 <- cross_validation(m7, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp7 <- performance_metrics(dfcv7)
 
-dfcv8 <- cross_validation(m8, cutoffs = cutoffs, horizon = 31, units = 'days')
+dfcv8 <- cross_validation(m8, cutoffs = cutoffs, horizon = 30, units = 'days')
 dfp8 <- performance_metrics(dfcv8)
 write_csv(forecast8, "Forecasts/m8_results.csv")
 write_csv(dfcv8, "Forecasts/m8_crossvalid.csv")

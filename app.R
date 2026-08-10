@@ -10,8 +10,8 @@ library(bslib)
 library(memoise)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
-data_asof = "data as of 31st May 2026" # Update latest description here
-Next_FC_Text = "June 2026 Forecast"
+data_asof = "data as of 31st July 2026" # Update latest description here
+Next_FC_Text = "August 2026 Forecast"
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("Data/car_data_sum.csv") |>
