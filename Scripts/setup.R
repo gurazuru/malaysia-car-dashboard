@@ -28,7 +28,36 @@ car_data_full <- car_data_full |>
   )) |>
   select(-type)
 
-head(car_data_full)
+# Fix some duplicate model names
+car_data_full2 <- car_data_full |>
+  mutate(
+    model = ifelse(maker == "iCaur" & model == "3", "03", model),
+    model = ifelse(model == "iCAUR 03 iWD", "03", model),
+    model = ifelse(model == "iCaur 03", "03", model),
+    model = ifelse(model == "iCar V23", "V23", model),
+    model = ifelse(model == "iCaur V23", "V23", model),
+    
+    maker = ifelse(maker == "Chery" & model == "03", "iCaur", maker),
+    maker = ifelse(maker == "Chery" & model == "V23", "iCaur", maker),
+    
+    model = ifelse(model == "Jaecoo J7", "J7", model),
+    model = ifelse(model == "Jaecoo J5", "J5", model),
+    model = ifelse(model == "Omoda 7", "Omoda C7", model),
+    model = ifelse(model == "Omoda 9", "Omoda C9", model),
+    model = ifelse(model == "Jaecoo J8", "J8", model),
+    model = ifelse(model == "Jaecoo J6", "J6", model),
+    
+    maker = ifelse(maker == "Chery" & model == "J7", "Jaecoo", maker),
+    maker = ifelse(maker == "Chery" & model == "J5", "Jaecoo", maker),
+    maker = ifelse(maker == "Chery" & model == "Omoda C7", "Jaecoo", maker),
+    maker = ifelse(maker == "Chery" & model == "Omoda C9", "Jaecoo", maker),
+    maker = ifelse(maker == "Chery" & model == "J8", "Jaecoo", maker),
+    maker = ifelse(maker == "Chery" & model == "J6", "Jaecoo", maker),
+    
+    maker = ifelse(maker == "Great Wall", "GWM", maker)
+  )
+
+head(car_data_full2)
 
 # --- load segment master ref ---
 segment_list <- readr::read_csv("Data/master_ref.csv") |>
@@ -38,7 +67,7 @@ segment_list <- readr::read_csv("Data/master_ref.csv") |>
 car_data_path <- "Data/car_data_sum.csv"
 car_data_sample_path <- "Data/car_data_sum_sample.csv"
 
-car_data_sum <- car_data_full |>
+car_data_sum <- car_data_full2 |>
   count(date_reg, maker, model, fuel_grouped, state, name = "count")
 
 car_data_sum <- car_data_sum |>

@@ -27,17 +27,18 @@ list_sedancd    <- c("S70", "Civic", "Preve", "Camry", "6", "Accord", "Ioniq 6",
                      "GR86", "A3", "B14", "407", "RCZ", "Fluence", "BRZ", "Impreza", "S40")
 
 list_suvb       <- c("WR-V", "HR-V", "Ativa", "X50", "CX-3", "CX-5", "CX-30", "Corolla Cross", 
-                     "XV", "Omoda 5", "Tiggo", "ASX", "Forester", "Atto 3", "Kicks", "iCaur 03",
-                     "iCaur V23", "B10", "Traz", "Atto 2", "C-HR", "Captur", "2008", "SX4", "Jimny",
+                     "XV", "Omoda 5", "Tiggo", "ASX", "Forester", "Atto 3", "Kicks", "03",
+                     "V23", "B10", "Traz", "Atto 2", "C-HR", "Captur", "2008", "SX4", "Jimny",
                      "Haval H1", "Haval M4", "GS3", "Jimny Sierra", "Ecosport", "Haval H2", "Kona",
-                     "Jaecoo J5", "QV-E", "S5", "Xforce", "e:N1", "Yaris Cross")
+                     "J5", "QV-E", "S5", "Xforce", "e:N1", "Yaris Cross", "Emkoo", "Tiggo Cross", "EX30")
 
-list_suvcd      <- c("CR-V", "X70", "X-Trail", "Harrier", "Jaecoo J7", "Jaecoo J8", "X90", 
-                     "Fortuner", "CX-8", "CX-9", "e.MAS 7", "3008", "Outlander", "Model Y", "Omoda 9", 
+list_suvcd      <- c("CR-V", "X70", "X-Trail", "Harrier", "J7", "J8", "X90", 
+                     "Fortuner", "CX-8", "CX-9", "e.MAS 7", "3008", "Outlander", "Model Y", "Omoda C9", 
                      "Sealion", "Captiva", "Tucson", "7X", "C10", "Sportage", "Pajero", "Santa Fe",
                      "Haval H6", "Sorento", "Dashing", "FJ Cruiser", "Kuga", "RAV4", "Grand Vitara",
                      "Murano", "G6", "Tank 300", "Escape", "Everest", "MU-X", "Wrangler", "VT9",
-                     "CX-60", "CX-7", "Koleos", "MG HS", "ZS", "ZS EV", "T2")
+                     "CX-60", "CX-7", "Koleos", "MG HS", "ZS", "ZS EV", "T1", "T2", "Tiggo 7", "Tiggo 7 Pro", 
+                     "Tiggo 8", "Tiggo 8 Pro", "Tank 500")
 
 list_mpv        <- c("Alza", "Aruz", "Xpander", "Veloz", "Exora", "Alphard",
                      "Vellfire", "Livina", "Grand Livina", "Avanza", "Innova", "Estima", "BR-V",
@@ -94,6 +95,7 @@ master_ref <- unique_models |>
       maker == "Polestar" & model == "2" ~ "Sedan-Luxury",
       maker == "Seres" & model == "3" ~ "SUV-B",
       maker == "MG" & model == "5" ~ "Sedan-B",
+      maker == "Zeekr" & model == "X" ~ "Hatchback",
       
       TRUE ~ segment
     )  

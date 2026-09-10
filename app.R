@@ -10,8 +10,8 @@ library(bslib)
 library(memoise)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
-data_asof = "data as of 31st July 2026" # Update latest description here
-Next_FC_Text = "August 2026 Forecast"
+data_asof = "Data as of 31st August 2026. Next update: 10th October 2026." # Update latest description here
+Next_FC_Text = "September 2026 Forecast"
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("Data/car_data_sum.csv") |>
@@ -19,7 +19,7 @@ car_data <- readr::read_csv("Data/car_data_sum.csv") |>
 
 # ---- Sample data ----
 # car_data <- car_data |> filter(year(date_reg) >= 2025)
-# car_data <- readr::read_csv("Data/car_data_sum_sample.csv")
+# car_data <- readr::read_csv("Data/car_data_sum_sample.csv") # either use this sample data, or filter the one above
 
 # ---- Key Date Variables ----
 latest_date <- max(car_data$date_reg)
@@ -88,7 +88,7 @@ ui <- page_fluid(
   
   titlePanel("Malaysia JPJ Vehicle Registration Data Dashboard"),
 
-  tags$h5("An interactive dashboard visualizing Malaysia's total industry volume and JPJ vehicle registration trends. Sourced from data.gov.my.",
+  tags$h5("An interactive dashboard visualizing Malaysia's total industry volume. Sourced from data.gov.my.",
           style = "color: #555; margin-top: -2px;"),
   
   card(
@@ -131,7 +131,7 @@ ui <- page_fluid(
                              )
              )
     ),
-    tabPanel("This Month's Forecast (Monthly Trend)",
+    tabPanel(Next_FC_Text,
       fluidRow(
              column(
                width = 3,
@@ -161,7 +161,7 @@ ui <- page_fluid(
   
   # ---- UI - Breakdown ----
   fluidRow(
-    column(width = 3,
+    column(width = 2,
            selectInput(
              inputId = "global_fuel_type",
              label = "Fuel Type:",
@@ -169,7 +169,7 @@ ui <- page_fluid(
              selected = "All"
            )
     ),
-    column(width = 3,
+    column(width = 2,
            selectInput(
              inputId = "global_segment",
              label = "Vehicle Segment:",
@@ -177,7 +177,7 @@ ui <- page_fluid(
              selected = "All"
            )
     ),
-    column(width = 3,
+    column(width = 2,
            selectInput(
              inputId = "year_selected",
              label = "Year:",
@@ -189,8 +189,17 @@ ui <- page_fluid(
            selectInput(
              inputId = "state_selected",
              label = "State*:",
-             choices = c("All", "Rakan Niaga", sort(setdiff(unique(car_data$state), "Rakan Niaga"))),
+             choices = c("All", "Rakan Niaga", sort(setdiff(unique(car_data$state), "Rakan Niaga")) ),
              selected = "All"
+           )
+    ),
+    column(width = 3,
+           selectInput(
+             inputId = "make_selected",
+             label = "Make:",
+             choices = sort(unique(car_data$maker)),
+             multiple = TRUE,
+             selectize = TRUE
            )
     )
   ),
@@ -198,119 +207,149 @@ ui <- page_fluid(
   # Note on "Rakan Niaga".
   tags$p(tags$em("*In recent years, more and more registrations have been made under 'Rakan Niaga'.")),
   
-  tabsetPanel(
-    id = "tabs",
-    tabPanel("By Make",
-             layout_columns(
-               card(
-                 height = c(740),
-                 card_header("Vehicle Registration Summary by Make"),
-                 DTOutput("summary_table")
-               ),
-               card(
-                 height = c(740),
-                 card_header(
-                   div(
-                     style = "display: flex; align-items: center; justify-content: space-between;",
-                     "View as: ",
-                     selectInput(
-                       inputId = "agg_level",
-                       label = NULL,
-                       choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                       selected = "Monthly"
-                     )
-                   ) 
-                 ),
-                 plotlyOutput("trend_plot_make")
-               ),
-               col_widths = c(6, 6)
-             )
+  # ---- Global controls row for Share ----
+  div(
+    style = "position: relative;",
+    # toggle - only 200px wide, top-right corner
+    div(
+      style = "position: absolute; top: 0; right: 0; z-index: 5; width: 220px; background: white;",
+      radioButtons("share_toggle", NULL, c("Volume","Share"), selected="Volume", inline=TRUE)
     ),
-    tabPanel("By Model",
-             layout_columns(
-               width = 12,
-               card(
-                 height = c(740),
-                 card_header("Vehicle Registration Summary by Model"),
-                 DTOutput("summary_table_model")
-               ),     
-               card(
-                 height = c(740),
-                 card_header(
-                   div(
-                     style = "display: flex; align-items: center; justify-content: space-between;",
-                     "View as: ",
-                     selectInput(
-                       inputId = "agg_level_model",
-                       label = NULL,
-                       choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                       selected = "Monthly"
-                     )
-                   ) 
-                 ),
-                 plotlyOutput("trend_plot_model")
-               ),
-               col_widths = c(6, 6)
-             )
+    # tabs - add right padding so the last tab isn't hidden under the toggle
+    div(
+      style = "padding-right: 0px;",
+      
+      tabsetPanel(
+        id = "tabs",
+        tabPanel("By Make",
+                 layout_columns(
+                   card(
+                     height = c(740),
+                     card_header(
+                       div(
+                         style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
+                         div("Vehicle Registration Summary by Make", style = "font-weight: 600;")
+                       )
+                     ),
+                     DTOutput("summary_table")
+                   ),
+                   card(
+                     height = c(740),
+                     card_header(
+                       div(
+                         style = "display: flex; align-items: center; justify-content: space-between;",
+                         "View as: ",
+                         selectInput(
+                           inputId = "agg_level",
+                           label = NULL,
+                           choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                           selected = "Monthly"
+                         )
+                       ) 
+                     ),
+                     plotlyOutput("trend_plot_make")
+                   ),
+                   col_widths = c(6, 6)
+                 )
+        ),
+        tabPanel("By Model",
+                 layout_columns(
+                   width = 12,
+                   card(
+                     height = c(740),
+                     card_header(
+                       div(
+                         style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
+                         div("Vehicle Registration Summary by Model", style = "font-weight: 600;"),
+                       )
+                     ),
+                     DTOutput("summary_table_model")
+                   ),     
+                   card(
+                     height = c(740),
+                     card_header(
+                       div(
+                         style = "display: flex; align-items: center; justify-content: space-between;",
+                         "View as: ",
+                         selectInput(
+                           inputId = "agg_level_model",
+                           label = NULL,
+                           choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                           selected = "Monthly"
+                         )
+                       ) 
+                     ),
+                     plotlyOutput("trend_plot_model")
+                   ),
+                   col_widths = c(6, 6)
+                 )
+        ),
+        tabPanel("By Fuel Type",
+                 layout_columns(
+                   width = 12,
+                   card(
+                     height = c(740),
+                     card_header(
+                       div(
+                         style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
+                         div("Vehicle Registration Summary by Fuel Type", style = "font-weight: 600;"),
+                       )
+                     ),
+                     DTOutput("summary_table_fuel")
+                   ),
+                   card(
+                     height = c(740),
+                     card_header(
+                       div(
+                         style = "display: flex; align-items: center; justify-content: space-between;",
+                         "View as: ",
+                         selectInput(
+                           inputId = "agg_level_fuel",
+                           label = NULL,
+                           choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                           selected = "Monthly"
+                         )
+                       ) 
+                     ),
+                     plotlyOutput("trend_plot_fuel")
+                   ),
+                   col_widths = c(6, 6)
+                 )
+        ),
+        tabPanel("By Make (Full Year)",
+                 layout_columns(
+                   col_widths =  c(12),
+                   card(
+                     height = c(740),
+                     card_header("Monthly Vehicle Registrations by Make"),
+                     DTOutput("annual_table")
+                   ),
+                   card(
+                     height = c(240),
+                     card_header("Monthly Vehicle Registrations Total"),
+                     DTOutput("annual_table_tiv")
+                   )
+                 )
+        ),
+        tabPanel("By Model (Full Year)",
+                 layout_columns(
+                   col_widths =  c(12),
+                   card(
+                     height = c(740),
+                     card_header("Monthly Vehicle Registrations by Model"),
+                     DTOutput("annual_table_model")
+                   ),
+                   card(
+                     height = c(240),
+                     card_header("Monthly Vehicle Registrations Total"),
+                     DTOutput("annual_table_model_tiv")
+                   )
+                 )
+        )
+      )
+      )
     ),
-    tabPanel("By Fuel Type",
-             layout_columns(
-               width = 12,
-               card(
-                 height = c(740),
-                 card_header("Vehicle Registration Summary by Fuel Type"),
-                 DTOutput("summary_table_fuel")
-               ),
-               card(
-                 height = c(740),
-                 card_header(
-                   div(
-                     style = "display: flex; align-items: center; justify-content: space-between;",
-                     "View as: ",
-                     selectInput(
-                       inputId = "agg_level_fuel",
-                       label = NULL,
-                       choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                       selected = "Monthly"
-                     )
-                   ) 
-                 ),
-                 plotlyOutput("trend_plot_fuel")
-               ),
-               col_widths = c(6, 6)
-             )
-    ),
-    tabPanel("By Make (Full Year)",
-             layout_columns(
-               col_widths =  c(12),
-               card(
-                 height = c(740),
-                 card_header("Monthly Vehicle Registrations by Make"),
-                 DTOutput("annual_table")
-               ),
-               card(
-                 height = c(240),
-                 card_header("Monthly Vehicle Registrations Total"),
-                 DTOutput("annual_table_tiv")
-               )
-             )
-    ),
-    tabPanel("By Model (Full Year)",
-             layout_columns(
-               col_widths =  c(12),
-               card(
-                 height = c(740),
-                 card_header("Monthly Vehicle Registrations by Model"),
-                 DTOutput("annual_table_model")
-               ),
-               card(
-                 height = c(240),
-                 card_header("Monthly Vehicle Registrations Total"),
-                 DTOutput("annual_table_model_tiv")
-               )
-             )
-    ),
-  ),
+
   actionButton("reset_selection", "Reset Selection"),
   
   tags$footer(
@@ -360,15 +399,18 @@ server <- function(input, output, session) {
     if (input$global_fuel_type != "All") {
       df <- df |> filter(fuel_grouped == input$global_fuel_type)
     }
-    
-    df <- df
+
     if (input$global_segment != "All") {
       df <- df |> filter(segment == input$global_segment)
     }
-    
-    df <- df
+
     if (input$state_selected != "All") {
       df <- df |> filter(state == input$state_selected)
+    }
+
+  
+    if (!is.null(input$make_selected) && length(input$make_selected) > 0) {
+      df <- df |> filter(maker %in% input$make_selected)
     }
     
     df <- df |> filter(year(date_reg) %in% c(as.numeric(input$year_selected), 
@@ -423,7 +465,7 @@ server <- function(input, output, session) {
   })
   
   # ---- Summary Function ----
-  make_summary <- function(data, group_col, group_col_name) {
+  make_summary <- function(data, group_col, group_col_name, data_type) {
     group_col <- sym(group_col)  # convert string to symbol for tidy evaluation
     
     data <- filtered_data()
@@ -441,7 +483,6 @@ server <- function(input, output, session) {
       
       ytd_previous_start <- ytd_current_start %m-% years(1)
       ytd_previous_end <- ytd_current_end %m-% years(1)
-      
       
       # Define all the relevant dates.
       month_current_name <- format(month_current, "%b %Y")
@@ -476,7 +517,7 @@ server <- function(input, output, session) {
           group_by(maker, !!group_col) |>
           summarise(count_ytd_previous = sum(count), .groups = "drop")
         
-        model_list() |>
+        base_df <- model_list() |>
           left_join(month_current_count, by = c("maker", "model")) |>
           mutate(count_current = replace_na(count_current, 0)) |>
           full_join(month_previous_count, by = c("maker", rlang::as_string(group_col))) |>
@@ -487,24 +528,56 @@ server <- function(input, output, session) {
             across(starts_with("count"), \(x) replace_na(x, 0)),
             growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
             growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
-            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
-          ) |>
-          arrange(desc(count_current)) |>
-          mutate(rank = row_number()) |>
-          select(rank, maker, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
-          rename(
-            `Rank` := rank,
-            `Make` := maker,
-            !!group_col_name := !!group_col,
-            !!month_current_name := count_current,
-            !!month_previous_name := count_previous,
-            `Growth (MoM)` := growth_MoM,
-            !!month_previous_year_name := count_previous_year,
-            `Growth (YoY)` := growth_YoY,
-            !!year_current_name := count_ytd_current,
-            !!year_previous_name := count_ytd_previous,
-            `Growth (YTD)` := growth_YTD
+            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_),
+            
+          # Market share calculations
+            share_current = count_current / sum(count_current),
+            share_previous = count_previous / sum(count_previous),
+            share_previous_year = count_previous_year / sum(count_previous_year),
+            share_ytd_current = count_ytd_current / sum(count_ytd_current),
+            share_ytd_previous = count_ytd_previous / sum(count_ytd_previous),
+            change_MoM = share_current - share_previous,
+            change_YoY = share_current - share_previous_year,
+            change_YTD = share_ytd_current - share_ytd_previous
           ) 
+        
+          if (data_type == "Volume") {
+          final_df <-  base_df |> 
+              arrange(desc(count_current)) |>
+              mutate(rank = row_number()) |>
+              select(rank, maker, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
+              rename(
+                `Rank` := rank,
+                `Make` := maker,
+                !!group_col_name := !!group_col,
+                !!month_current_name := count_current,
+                !!month_previous_name := count_previous,
+                `Growth (MoM)` := growth_MoM,
+                !!month_previous_year_name := count_previous_year,
+                `Growth (YoY)` := growth_YoY,
+                !!year_current_name := count_ytd_current,
+                !!year_previous_name := count_ytd_previous,
+                `Growth (YTD)` := growth_YTD
+              ) 
+          } else {
+            final_df <-  base_df |> 
+              arrange(desc(count_current)) |>
+              mutate(rank = row_number()) |>
+              select(rank, maker, !!group_col, share_current, share_previous, change_MoM, share_previous_year, change_YoY, share_ytd_current, share_ytd_previous, change_YTD) |>
+              rename(
+                `Rank` := rank,
+                `Make` := maker,
+                !!group_col_name := !!group_col,
+                !!month_current_name := share_current,
+                !!month_previous_name := share_previous,
+                `Change (MoM)` := change_MoM,
+                !!month_previous_year_name := share_previous_year,
+                `Change (YoY)` := change_YoY,
+                !!year_current_name := share_ytd_current,
+                !!year_previous_name := share_ytd_previous,
+                `Change (YTD)` := change_YTD
+              )
+          }
       } else if (group_col == "maker") {
         month_current_count <- data |>
           filter(date_reg == month_current) |>
@@ -531,7 +604,7 @@ server <- function(input, output, session) {
           group_by(!!group_col) |>
           summarise(count_ytd_previous = sum(count), .groups = "drop")
         
-        maker_list() |>
+        base_df <- maker_list() |>
           left_join(month_current_count, by = c(rlang::as_string(group_col))) |>
           mutate(count_current = replace_na(count_current, 0)) |>
           full_join(month_previous_count, by = rlang::as_string(group_col)) |>
@@ -542,23 +615,55 @@ server <- function(input, output, session) {
             across(starts_with("count"), \(x) replace_na(x, 0)),
             growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
             growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
-            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
-          ) |>
-          arrange(desc(count_current)) |>
-          mutate(rank = row_number()) |>
-          select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
-          rename(
-            `Rank` := rank,
-            !!group_col_name := !!group_col,
-            !!month_current_name := count_current,
-            !!month_previous_name := count_previous,
-            `Growth (MoM)` := growth_MoM,
-            !!month_previous_year_name := count_previous_year,
-            `Growth (YoY)` := growth_YoY,
-            !!year_current_name := count_ytd_current,
-            !!year_previous_name := count_ytd_previous,
-            `Growth (YTD)` := growth_YTD
-          ) 
+            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_),
+            
+            # Market share calculations
+            share_current = count_current / sum(count_current),
+            share_previous = count_previous / sum(count_previous),
+            share_previous_year = count_previous_year / sum(count_previous_year),
+            share_ytd_current = count_ytd_current / sum(count_ytd_current),
+            share_ytd_previous = count_ytd_previous / sum(count_ytd_previous),
+            change_MoM = share_current - share_previous,
+            change_YoY = share_current - share_previous_year,
+            change_YTD = share_ytd_current - share_ytd_previous
+          )
+          
+          if (data_type == "Volume") {
+            final_df <- base_df |> 
+              arrange(desc(count_current)) |>
+              mutate(rank = row_number()) |>
+              select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
+              rename(
+                `Rank` := rank,
+                !!group_col_name := !!group_col,
+                !!month_current_name := count_current,
+                !!month_previous_name := count_previous,
+                `Growth (MoM)` := growth_MoM,
+                !!month_previous_year_name := count_previous_year,
+                `Growth (YoY)` := growth_YoY,
+                !!year_current_name := count_ytd_current,
+                !!year_previous_name := count_ytd_previous,
+                `Growth (YTD)` := growth_YTD
+              ) 
+          } else{
+            final_df <- base_df |> 
+              arrange(desc(count_current)) |>
+              mutate(rank = row_number()) |>
+              select(rank, !!group_col, share_current, share_previous, change_MoM, share_previous_year, change_YoY, share_ytd_current, share_ytd_previous, change_YTD) |>
+              rename(
+                `Rank` := rank,
+                !!group_col_name := !!group_col,
+                !!month_current_name := share_current,
+                !!month_previous_name := share_previous,
+                `Change (MoM)` := change_MoM,
+                !!month_previous_year_name := share_previous_year,
+                `Change (YoY)` := change_YoY,
+                !!year_current_name := share_ytd_current,
+                !!year_previous_name := share_ytd_previous,
+                `Change (YTD)` := change_YTD
+              )
+            
+          }
       } else {
         month_current_count <- data |>
           filter(date_reg == month_current) |>
@@ -585,7 +690,7 @@ server <- function(input, output, session) {
           group_by(!!group_col) |>
           summarise(count_ytd_previous = sum(count), .groups = "drop")
         
-        fuel_grouped_list() |>
+        base_df <- fuel_grouped_list() |>
           left_join(month_current_count, by = c(rlang::as_string(group_col))) |>
           mutate(count_current = replace_na(count_current, 0)) |>
           full_join(month_previous_count, by = rlang::as_string(group_col)) |>
@@ -596,30 +701,62 @@ server <- function(input, output, session) {
             across(starts_with("count"), \(x) replace_na(x, 0)),
             growth_MoM = if_else(count_previous > 0, (count_current / count_previous - 1), NA_real_),
             growth_YoY = if_else(count_previous_year > 0, (count_current / count_previous_year - 1), NA_real_),
-            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_)
-          ) |>
-          arrange(desc(count_current)) |>
-          mutate(rank = row_number()) |>
-          select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
-          rename(
-            `Rank` := rank,
-            !!group_col_name := !!group_col,
-            !!month_current_name := count_current,
-            !!month_previous_name := count_previous,
-            `Growth (MoM)` := growth_MoM,
-            !!month_previous_year_name := count_previous_year,
-            `Growth (YoY)` := growth_YoY,
-            !!year_current_name := count_ytd_current,
-            !!year_previous_name := count_ytd_previous,
-            `Growth (YTD)` := growth_YTD
-          ) 
+            growth_YTD = if_else(count_ytd_previous > 0, (count_ytd_current / count_ytd_previous - 1), NA_real_),
+            
+            # Market share calculations
+            share_current = count_current / sum(count_current),
+            share_previous = count_previous / sum(count_previous),
+            share_previous_year = count_previous_year / sum(count_previous_year),
+            share_ytd_current = count_ytd_current / sum(count_ytd_current),
+            share_ytd_previous = count_ytd_previous / sum(count_ytd_previous),
+            change_MoM = share_current - share_previous,
+            change_YoY = share_current - share_previous_year,
+            change_YTD = share_ytd_current - share_ytd_previous
+            
+          )
+          
+          if (data_type == "Volume") {
+            final_df <- base_df |> 
+              arrange(desc(count_current)) |>
+              mutate(rank = row_number()) |>
+              select(rank, !!group_col, count_current, count_previous, growth_MoM, count_previous_year, growth_YoY, count_ytd_current, count_ytd_previous, growth_YTD) |>
+              rename(
+                `Rank` := rank,
+                !!group_col_name := !!group_col,
+                !!month_current_name := count_current,
+                !!month_previous_name := count_previous,
+                `Growth (MoM)` := growth_MoM,
+                !!month_previous_year_name := count_previous_year,
+                `Growth (YoY)` := growth_YoY,
+                !!year_current_name := count_ytd_current,
+                !!year_previous_name := count_ytd_previous,
+                `Growth (YTD)` := growth_YTD
+              )
+          } else{
+            final_df <- base_df |> 
+              arrange(desc(count_current)) |>
+              mutate(rank = row_number()) |>
+              select(rank, !!group_col, share_current, share_previous, change_MoM, share_previous_year, change_YoY, share_ytd_current, share_ytd_previous, change_YTD) |>
+              rename(
+                `Rank` := rank,
+                !!group_col_name := !!group_col,
+                !!month_current_name := share_current,
+                !!month_previous_name := share_previous,
+                `Change (MoM)` := change_MoM,
+                !!month_previous_year_name := share_previous_year,
+                `Change (YoY)` := change_YoY,
+                !!year_current_name := share_ytd_current,
+                !!year_previous_name := share_ytd_previous,
+                `Change (YTD)` := change_YTD
+              )
+            
+          }
       }
     }
   }
   
-  
   # ---- Annual YTD Function ----
-  make_annual <- function(data, group_col, group_col_name) {
+  make_annual <- function(data, group_col, group_col_name, data_type) {
     group_col <- sym(group_col)  # convert string to symbol for tidy evaluation
     
     data <- filtered_data()
@@ -673,66 +810,20 @@ server <- function(input, output, session) {
             !!sym(year_colname)
           )
         
-        # monthly_data <- function(month_num, year_num){
-        #   data <- data |>
-        #     filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-        #     group_by(maker, !!group_col) |>
-        #     summarise(count_current = sum(count), .groups = "drop")
-        # 
-        #   colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        # 
-        #   data <- data |> rename(!!colname := count_current)
-        # 
-        #   return(data)
-        # }
-        # 
-        # Jan_Count <- monthly_data(1, input$year_selected)
-        # Feb_Count <- monthly_data(2, input$year_selected)
-        # Mar_Count <- monthly_data(3, input$year_selected)
-        # Apr_Count <- monthly_data(4, input$year_selected)
-        # May_Count <- monthly_data(5, input$year_selected)
-        # Jun_Count <- monthly_data(6, input$year_selected)
-        # Jul_Count <- monthly_data(7, input$year_selected)
-        # Aug_Count <- monthly_data(8, input$year_selected)
-        # Sep_Count <- monthly_data(9, input$year_selected)
-        # Oct_Count <- monthly_data(10, input$year_selected)
-        # Nov_Count <- monthly_data(11, input$year_selected)
-        # Dec_Count <- monthly_data(12, input$year_selected)
-        # 
-        # Year_Total_Count <- data |>
-        #   filter(year(date_reg) == input$year_selected) |>
-        #   group_by(maker, !!group_col) |>
-        #   summarise(count_current = sum(count), .groups = "drop")
-        # 
-        # year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-        # 
-        # Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-        # 
-        # data <- model_list_annual() |>
-        #   left_join(Year_Total_Count, by = c("maker", "model")) |>
-        #   full_join(Jan_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Feb_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Mar_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Apr_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(May_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Jun_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Jul_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Aug_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Sep_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Oct_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Nov_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   full_join(Dec_Count, by = c("maker", rlang::as_string(group_col))) |>
-        #   arrange(desc('Total')) |>
-        #   mutate(rank = row_number()) |>
-        #   select(rank, maker, !!group_col,
-        #          all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        #                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-        #   ) |>
-        #   rename(
-        #     `Rank` := rank,
-        #     `Make` := maker,
-        #     !!group_col_name := !!group_col,
-        #   )
+        # Share version (divide each column by column sum)
+        share_data <- data |>
+          mutate(
+            across(all_of(all_months), ~ {
+              tot <- sum(.x, na.rm = TRUE)
+              if(tot > 0) .x / tot else 0
+            }),
+            !!year_colname := !!sym(year_colname) / sum(!!sym(year_colname), na.rm = TRUE)
+          ) |>
+          
+          # Rank stays same as volume - don't re-rank on share
+          arrange(desc(!!sym(year_colname))) |>
+          mutate(Rank = row_number())
+        
       } else if (group_col == "maker") {
         
         # Filter the entire year's data ONCE
@@ -780,69 +871,27 @@ server <- function(input, output, session) {
             !!sym(year_colname)
           )
         
-        # monthly_data <- function(month_num, year_num){
-        #   data <- data |>
-        #     filter(month(date_reg) == month_num, year(date_reg) == year_num) |>
-        #     group_by(!!group_col) |>
-        #     summarise(count_current = sum(count), .groups = "drop")
-        #   
-        #   colname <- format(as.Date(paste(year_num, month_num, 1, sep = "-")), "%b %Y")
-        #   
-        #   data <- data |> rename(!!colname := count_current)
-        #   
-        #   return(data)
-        # }
-        # 
-        # Jan_Count <- monthly_data(1, input$year_selected)
-        # Feb_Count <- monthly_data(2, input$year_selected)
-        # Mar_Count <- monthly_data(3, input$year_selected)
-        # Apr_Count <- monthly_data(4, input$year_selected)
-        # May_Count <- monthly_data(5, input$year_selected)
-        # Jun_Count <- monthly_data(6, input$year_selected)
-        # Jul_Count <- monthly_data(7, input$year_selected)
-        # Aug_Count <- monthly_data(8, input$year_selected)
-        # Sep_Count <- monthly_data(9, input$year_selected)
-        # Oct_Count <- monthly_data(10, input$year_selected)
-        # Nov_Count <- monthly_data(11, input$year_selected)
-        # Dec_Count <- monthly_data(12, input$year_selected)
-        # 
-        # Year_Total_Count <- data |>
-        #   filter(year(date_reg) == input$year_selected) |>
-        #   group_by(!!group_col) |>
-        #   summarise(count_current = sum(count), .groups = "drop")
-        # 
-        # year_colname <- paste0("Total ", format(as.Date(paste(input$year_selected, 1, 1, sep = "-")), "%Y"))
-        # 
-        # Year_Total_Count <- Year_Total_Count |> rename(!!year_colname := count_current)
-        # 
-        # data <- maker_list_annual() |>
-        #   left_join(Year_Total_Count, by = c("maker")) |>
-        #   full_join(Jan_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Feb_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Mar_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Apr_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(May_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Jun_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Jul_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Aug_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Sep_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Oct_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Nov_Count, by = c(rlang::as_string(group_col))) |>
-        #   full_join(Dec_Count, by = c(rlang::as_string(group_col))) |>
-        #   arrange(desc('Total')) |>
-        #   mutate(rank = row_number()) |>
-        #   select(rank, !!group_col,
-        #          all_of(paste(c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-        #                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Total"), input$year_selected))
-        #   ) |>
-        #   rename(
-        #     `Rank` := rank,
-        #     !!group_col_name := !!group_col,
-        #   )
-        
+        # Share version (divide each column by column sum)
+        share_data <- data |>
+          mutate(
+            across(all_of(all_months), ~ {
+              tot <- sum(.x, na.rm = TRUE)
+              if(tot > 0) .x / tot else 0
+            }),
+            !!year_colname := !!sym(year_colname) / sum(!!sym(year_colname), na.rm = TRUE)
+          ) |>
+          
+        # Rank stays same as volume - don't re-rank on share
+        arrange(desc(!!sym(year_colname))) |>
+        mutate(Rank = row_number())
       } else {
       }
-    return(data)
+    
+    if (data_type  == "Volume") {
+      return(data)
+    } else {
+      return(share_data)
+    }  
   }
   
   # Get annual TIV for total all stats
@@ -994,12 +1043,17 @@ server <- function(input, output, session) {
   
   # ---- Output Data Table Functions ----
   data_table_TIV <- function(df) {
-    df <- df() 
+    df <- df()  
+    
+    # which columns are numbers but NOT the growth % columns
+    pct_cols <- c("Growth (MoM)", "Growth (YoY)", "Growth (YTD)")
+    num_cols <- setdiff(names(df)[sapply(df, is.numeric)], pct_cols)
     
     datatable(df,
               rownames = FALSE,
               options = list(dom = 't', ordering = FALSE),
               class = 'cell-border stripe') |>
+      formatRound(columns = num_cols, digits = 0, mark = ",") |>
       formatPercentage("Growth (MoM)", 1) |>
       formatPercentage("Growth (YoY)", 1) |>
       formatPercentage("Growth (YTD)", 1) |>
@@ -1008,92 +1062,193 @@ server <- function(input, output, session) {
       formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
   }
   
+  # input$share_toggle
+  
   data_table <- function(df) {
     df <- df() 
     
-    datatable(df,
-              rownames = FALSE,
-              filter = 'top',
-              selection = list(mode = "multiple"
-                               #, selected = 1:5
-              ),
-              
-              extensions = 'Buttons',
-              
-              options = list(
-                dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
-                
-                fixedColumns = TRUE,
-                autoWidth = TRUE,
-                ordering = TRUE,
-                searching = TRUE,
-                buttons = c('excel'),
-                
-                buttons = list(
-                  list(
-                    extend = "excel",
-                    text = "Export to Excel",
-                    title = NULL,
-                    filename = "data",
-                    exportOptions = list(
-                      modifier = list(page = "all")
-                    )
-                  )# export all pages
+    is_share <- input$share_toggle == "Share"
+    
+    if(is_share) {
+      
+      # which columns are numbers but NOT the growth % columns
+      exclude_cols <- c("Rank", "Change (MoM)", "Change (YoY)", "Change (YTD)")
+      num_cols <- setdiff(names(df)[sapply(df, is.numeric)], exclude_cols)
+      
+      datatable(df,
+                rownames = FALSE,
+                filter = 'top',
+                selection = list(mode = "multiple"
+                                 #, selected = 1:5
                 ),
                 
-                pageLength = 10
-              ),
-              class = 'cell-border stripe') |>
-      formatPercentage("Growth (MoM)", 1) |>
-      formatPercentage("Growth (YoY)", 1) |>
-      formatPercentage("Growth (YTD)", 1) |>
-      formatStyle("Growth (MoM)", color = styleInterval(c(0), c('red', 'green'))) |>
-      formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
-      formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
+                extensions = 'Buttons',
+                
+                options = list(
+                  dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
+                  
+                  fixedColumns = TRUE,
+                  autoWidth = TRUE,
+                  ordering = TRUE,
+                  searching = TRUE,
+                  buttons = c('excel'),
+                  
+                  buttons = list(
+                    list(
+                      extend = "excel",
+                      text = "Export to Excel",
+                      title = NULL,
+                      filename = "data",
+                      exportOptions = list(
+                        modifier = list(page = "all")
+                      )
+                    )# export all pages
+                  ),
+                  
+                  pageLength = 10
+                ),
+                class = 'cell-border stripe') |>
+        formatPercentage(columns = num_cols, digits = 1) |>
+        formatPercentage("Change (MoM)", 1) |>
+        formatPercentage("Change (YoY)", 1) |>
+        formatPercentage("Change (YTD)", 1) |>
+        formatStyle("Change (MoM)", color = styleInterval(c(0), c('red', 'green'))) |>
+        formatStyle("Change (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
+        formatStyle("Change (YTD)", color = styleInterval(c(0), c('red', 'green')))
+    } else {
+      pct_cols <- c("Growth (MoM)", "Growth (YoY)", "Growth (YTD)")
+      num_cols <- setdiff(names(df)[sapply(df, is.numeric)], pct_cols)
+      
+      datatable(df,
+                rownames = FALSE,
+                filter = 'top',
+                selection = list(mode = "multiple"
+                                 #, selected = 1:5
+                ),
+                
+                extensions = 'Buttons',
+                
+                options = list(
+                  dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
+                  
+                  fixedColumns = TRUE,
+                  autoWidth = TRUE,
+                  ordering = TRUE,
+                  searching = TRUE,
+                  buttons = c('excel'),
+                  
+                  buttons = list(
+                    list(
+                      extend = "excel",
+                      text = "Export to Excel",
+                      title = NULL,
+                      filename = "data",
+                      exportOptions = list(
+                        modifier = list(page = "all")
+                      )
+                    )# export all pages
+                  ),
+                  
+                  pageLength = 10
+                ),
+                class = 'cell-border stripe') |>
+        formatRound(columns = num_cols, digits = 0, mark = ",") |>
+        formatPercentage("Growth (MoM)", 1) |>
+        formatPercentage("Growth (YoY)", 1) |>
+        formatPercentage("Growth (YTD)", 1) |>
+        formatStyle("Growth (MoM)", color = styleInterval(c(0), c('red', 'green'))) |>
+        formatStyle("Growth (YoY)", color = styleInterval(c(0), c('red', 'green'))) |>
+        formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
+    }
   }
   
   # ---- Data table for annual (YTD) data. Diff is that there's no Growth data here ----
   data_table_annual <- function(df) {
     df <- df() 
     
-    datatable(df,
-              rownames = FALSE,
-              filter = 'top',
-              selection = list(mode = "multiple"
-                               #, selected = 1:5
-              ),
-              
-              extensions = 'Buttons',
-              
-              options = list(
-                dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
-
-                fixedColumns = TRUE,
-                autoWidth = TRUE,
-                ordering = TRUE,
-                searching = TRUE,
-                buttons = c('excel'),
-                
-                buttons = list(
-                  list(
-                    extend = "excel",
-                    text = "Export to Excel",
-                    title = NULL,
-                    filename = "data",
-                    exportOptions = list(
-                      modifier = list(page = "all")
-                    )
-                  )# export all pages
+    is_share <- input$share_toggle == "Share"
+    
+    # all columns are numbers, but ignore Rank pls
+    exclude_cols <- c("Rank")
+    num_cols <- setdiff(names(df)[sapply(df, is.numeric)], exclude_cols)
+    
+    if(is_share) {
+      datatable(df,
+                rownames = FALSE,
+                filter = 'top',
+                selection = list(mode = "multiple"
+                                 #, selected = 1:5
                 ),
                 
-                pageLength = 10
-              ),
-              class = 'cell-border stripe')
+                extensions = 'Buttons',
+                
+                options = list(
+                  dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
+  
+                  fixedColumns = TRUE,
+                  autoWidth = TRUE,
+                  ordering = TRUE,
+                  searching = TRUE,
+                  buttons = c('excel'),
+                  
+                  buttons = list(
+                    list(
+                      extend = "excel",
+                      text = "Export to Excel",
+                      title = NULL,
+                      filename = "data",
+                      exportOptions = list(
+                        modifier = list(page = "all")
+                      )
+                    )# export all pages
+                  ),
+                  
+                  pageLength = 10
+                ),
+                class = 'cell-border stripe') |>
+                formatPercentage(columns = num_cols, 1)
+    } else {
+      datatable(df,
+                rownames = FALSE,
+                filter = 'top',
+                selection = list(mode = "multiple"
+                                 #, selected = 1:5
+                ),
+                
+                extensions = 'Buttons',
+                
+                options = list(
+                  dom = 'Btip', # B = Buttons, f = Global search box, t = table, i/p = info/pagination
+                  
+                  fixedColumns = TRUE,
+                  autoWidth = TRUE,
+                  ordering = TRUE,
+                  searching = TRUE,
+                  buttons = c('excel'),
+                  
+                  buttons = list(
+                    list(
+                      extend = "excel",
+                      text = "Export to Excel",
+                      title = NULL,
+                      filename = "data",
+                      exportOptions = list(
+                        modifier = list(page = "all")
+                      )
+                    )# export all pages
+                  ),
+                  
+                  pageLength = 10
+                ),
+                class = 'cell-border stripe') |>
+                formatRound(columns = num_cols, digits = 0, mark = ",")
+    }
   }
   
   data_table_annual_tiv <- function(df) {
     df <- df() 
     
+    num_cols <- names(df)[sapply(df, is.numeric)]
     datatable(df,
               rownames = FALSE,
               
@@ -1106,7 +1261,8 @@ server <- function(input, output, session) {
                 paging = FALSE,
                 searching = FALSE
               ),
-              class = 'cell-border stripe')
+              class = 'cell-border stripe') |>
+      formatRound(columns = num_cols, digits = 0, mark = ",")
   }
   
   # ---- Selections ----
@@ -1392,12 +1548,12 @@ server <- function(input, output, session) {
   })
   
   # ---- Reactive summary ----
-  summary_data          <- reactive(make_summary(car_data, "maker", "Make"))
-  summary_data_model    <- reactive(make_summary(car_data, "model", "Model"))
-  summary_data_fuel     <- reactive(make_summary(car_data, "fuel_grouped", "Fuel Type"))
+  summary_data          <- reactive(make_summary(car_data, "maker", "Make", input$share_toggle))
+  summary_data_model    <- reactive(make_summary(car_data, "model", "Model", input$share_toggle))
+  summary_data_fuel     <- reactive(make_summary(car_data, "fuel_grouped", "Fuel Type", input$share_toggle))
   
-  annual_data           <- reactive(make_annual(car_data, "maker", "Make"))
-  annual_data_model     <- reactive(make_annual(car_data, "model", "Model"))
+  annual_data           <- reactive(make_annual(car_data, "maker", "Make", input$share_toggle))
+  annual_data_model     <- reactive(make_annual(car_data, "model", "Model", input$share_toggle))
   annual_data_tiv       <- reactive(make_annual_tiv(car_data, "no"))
   annual_data_tiv_model <- reactive(make_annual_tiv(car_data, "yes"))
   
