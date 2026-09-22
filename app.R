@@ -8,14 +8,90 @@ library(plotly)
 library(forecast)
 library(bslib)
 library(memoise)
+library(scales)
+library(readODS)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
 data_asof = "Data as of 31st August 2026. Next update: 10th October 2026." # Update latest description here
 Next_FC_Text = "September 2026 Forecast"
+latest_month = "8" # 1 = January, 2 = February, etc.
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("Data/car_data_sum.csv") |>
   mutate(date_reg = floor_date(date_reg, unit = "month"))
+
+# ---- Load Forecast Data ----
+# Next 12 months
+forecast_next12 <- readRDS("Data/forecast_monthly.rds")
+forecast_next12 <- forecast_next12 |>
+  filter(month > max(month) %m-% months(12)) |>
+  mutate(type = "Forecast") |>
+  rename(date_reg := month, TIV := yhat)
+
+forecast_nextmonth <- readRDS("Data/forecast_fd.rds")
+forecast_nextmonth <- forecast_nextmonth |>
+  rename(date_reg := Date, TIV := Forecast, TIV_Cum := Forecast_Cum)
+
+forecast_segment <- function(segment_name, segment_column) {
+  forecast_next12 <- readRDS(
+    paste0("Data/forecast_monthly_segments.rds")
+  ) |>
+    filter(segment == segment_column) |>
+    filter(month > max(month) %m-% months(12)) |>
+    mutate(type = "Forecast") |>
+    rename(date_reg := month, TIV := yhat)
+  
+  forecast_nextmonth <- readRDS(paste0("Data/forecast_fd_", segment_name, ".rds")) |>
+    rename(date_reg := Date, TIV := Forecast, TIV_Cum := Forecast_Cum)
+  
+  list(
+    next12 = forecast_next12,
+    nextmonth = forecast_nextmonth
+  )
+}
+hatchback <- forecast_segment("hatchback", "Hatchback")
+mpv       <- forecast_segment("mpv", "MPV")
+mini      <- forecast_segment("mini", "Mini")
+pickup    <- forecast_segment("pickup", "Pick-Up")
+sedana    <- forecast_segment("sedana", "Sedan-A")
+sedanb    <- forecast_segment("sedanb", "Sedan-B")
+sedancd   <- forecast_segment("sedancd", "Sedan-C/D")
+suvb      <- forecast_segment("suvb", "SUV-B")
+suvcd     <- forecast_segment("suvcd", "SUV-C/D")
+
+# Create a list to call in reactive for segment forecasts
+forecast_segments <- list(
+  hatchback = hatchback,
+  mpv = mpv,
+  mini = mini,
+  pickup = pickup,
+  sedana = sedana,
+  sedanb = sedanb,
+  sedancd = sedancd,
+  suvb = suvb,
+  suvcd = suvcd
+)
+
+# ---- Load Validated Results (Actual v. Forecast) ----
+validated_results <- readr::read_csv("Forecasts/actual_vs_forecast_summary.csv") |>
+  select(segment, year, month, TIV_FC, TIV_ACTUAL, pct_error) |>
+  mutate(
+    TIV_FC = round(TIV_FC), 
+    forecast_month = format(
+      make_date(year, month, 1),
+      "%b %Y"
+    )
+  ) |>
+  select(segment, year, month, forecast_month, TIV_FC, TIV_ACTUAL, pct_error)
+
+# ---- Load Validated Results Remarks ----
+forecast_remarks <- read_ods("Forecasts/Actual v. Forecast Summary - working.ods", sheet=1)[, 1:4]
+
+validated_results <- validated_results |>
+  left_join(
+    forecast_remarks,
+    by = c("year", "month", "segment")
+  )
 
 # ---- Sample data ----
 # car_data <- car_data |> filter(year(date_reg) >= 2025)
@@ -44,25 +120,23 @@ month_previous_year_name <- format(month_previous_year, "%b %Y")
 year_current_name <- paste0("YTD ", format(ytd_current_end, "%Y"))
 year_previous_name <- paste0("YTD ", format(ytd_previous_end, "%Y"))
 
+# Get forecast month (m+1) and mtd (either sys.date yesterday or last day of the m+1)
+latest_actual_month <- floor_date(max(car_data$date_reg), "month")
+
+forecast_month <- latest_actual_month %m+% months(1)
+
+mtd_date <- min(
+  Sys.Date() - 1,
+  ceiling_date(forecast_month, "month") - days(1)
+)
+
 # ---- Forecasting ----
+# ---- FC - TIV ----
 # aggregate data to monthly data to get monthly TIV
 tiv_monthly <- car_data |>
   group_by(date_reg = floor_date(date_reg, "month")) |>
   summarise(TIV = sum(count, na.rm = TRUE)) |>
   arrange(date_reg)
-
-# Next 12 months
-forecast_next12 <- readRDS("Data/forecast_monthly.rds")
-forecast_next12 <- forecast_next12 |>
-  filter(
-    month > max(month) %m-% months(12)
-  ) |>
-  mutate(type = "Forecast") |>
-  rename(date_reg := month, TIV := yhat)
-
-forecast_nextmonth <- readRDS("Data/forecast_fd.rds")
-forecast_nextmonth <- forecast_nextmonth |>
-  rename(date_reg := Date, TIV := Forecast, TIV_Cum := Forecast_Cum)
 
 # limit to previous 12 months to plot
 tiv_monthly_l12m <- tiv_monthly |>
@@ -76,14 +150,151 @@ tiv_plot_df <- tiv_monthly |>
 # ---- UI ----
 ui <- page_fluid(
   tags$head(
-    tags$link(rel = "canonical", href = "https://gurazuru.github.io/malaysia-car-dashboard/"),
+    tags$link(
+      rel = "canonical", 
+      href = "https://gurazuru.github.io/malaysia-car-dashboard/"
+    ),
     tags$style(HTML("
       body {
-        zoom: 95%;
-        -moz-transform: scale(0.95);
-        -moz-transform-origin: 0 0;
+      zoom: 95%;
+      -moz-transform: scale(0.95);
+      -moz-transform-origin: 0 0;
       }
+      
+      .forecast-note {
+      margin-top: 5px;
+      margin-bottom: 5px;
+      font-size: 15px;
+    }
+
+    .forecast-note summary {
+      cursor: pointer;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .forecast-note p {
+      margin: 8px 0 0 20px;
+      color: #666;
+      line-height: 1.5;
+    }
+      
+      /* =========================
+         DARK MODE
+         ========================= */
+      
+      body.dark-mode {
+        background-color: #1e1e1e !important;
+        color: #eeeeee !important;
+      }
+
+      body.dark-mode .bslib-page {
+        background-color: #1e1e1e !important;
+      }
+
+      body.dark-mode .card {
+        background-color: #2b2b2b !important;
+        color: #eeeeee !important;
+        border-color: #444444 !important;
+      }
+
+      body.dark-mode .card-header {
+        background-color: #333333 !important;
+        color: #ffffff !important;
+      }
+
+      body.dark-mode h1,
+      body.dark-mode h2,
+      body.dark-mode h3,
+      body.dark-mode h4,
+      body.dark-mode h5,
+      body.dark-mode h6 {
+        color: #eeeeee !important;
+      }
+
+      body.dark-mode .form-control,
+      body.dark-mode .selectize-input {
+        background-color: #333333 !important;
+        color: #eeeeee !important;
+        border-color: #555555 !important;
+      }
+
+      body.dark-mode .selectize-dropdown {
+        background-color: #333333 !important;
+        color: #eeeeee !important;
+      }
+
+      body.dark-mode .selectize-dropdown .option:hover {
+        background-color: #444444 !important;
+      }
+
+      body.dark-mode .dataTables_wrapper {
+        color: #eeeeee !important;
+      }
+
+      body.dark-mode table.dataTable {
+        color: #eeeeee !important;
+      }
+
+      body.dark-mode table.dataTable tbody tr {
+        background-color: #2b2b2b !important;
+      }
+
+      body.dark-mode table.dataTable tbody tr:hover {
+        background-color: #3a3a3a !important;
+      }
+
+      /* Night mode button */
+      #dark_mode_toggle {
+        position: fixed;
+        top: 15px;
+        right: 20px;
+        z-index: 9999;
+        border: none;
+        border-radius: 20px;
+        padding: 7px 12px;
+        background-color: #eeeeee;
+        color: #333333;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      body.dark-mode #dark_mode_toggle {
+        background-color: #444444;
+        color: #ffffff;
+      }   
+    ")),
+    
+    tags$script(HTML("
+      function toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+
+        const isDark =
+          document.body.classList.contains('dark-mode');
+
+        localStorage.setItem('darkMode', isDark);
+        
+        document.getElementById('dark_mode_toggle').innerHTML =
+          isDark ? '☀️' : '🌙';
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const darkMode =
+          localStorage.getItem('darkMode') === 'true';
+
+        if (darkMode) {
+          document.body.classList.add('dark-mode');
+          document.getElementById('dark_mode_toggle').innerHTML =
+            '☀️';
+        }
+      });
     "))
+  ),
+  
+  tags$button(
+    id = "dark_mode_toggle",
+    onclick = "toggleDarkMode()",
+    "🌙"
   ),
   
   titlePanel("Malaysia JPJ Vehicle Registration Data Dashboard"),
@@ -91,71 +302,136 @@ ui <- page_fluid(
   tags$h5("An interactive dashboard visualizing Malaysia's total industry volume. Sourced from data.gov.my.",
           style = "color: #555; margin-top: -2px;"),
   
-  card(
-    height = c(180),
-    card_header(data_asof),
-    DTOutput("summary_table_total")
+  div(
+    card(
+      height = c(180),
+      style = "overflow: visible;",
+      
+      card_header(
+        style = "
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        overflow: visible;
+      ",
+        
+        div(
+          data_asof
+        ),
+        
+        div(
+          style = "
+          width: 180px;
+          margin-left: 20px;
+          margin-bottom: 0px;
+        ",
+          
+          selectInput(
+            inputId = "vehicle_segment_fc",
+            label = NULL,
+            choices = c(
+              "All", "Hatchback", "Mini", "MPV", "Pick-Up",
+              "Sedan-A", "Sedan-B", "Sedan-C/D",
+              "SUV-B", "SUV-C/D"
+            ),
+            selected = "All",
+            width = "100%"
+          )
+        )
+      ),
+      DTOutput("summary_table_total")
+    )
   ),
   
-  tabsetPanel(
-    id = "toptabs",
-    tabPanel("TIV",
-             layout_columns( width = 12,
-                             card(
-                               height = c(280),
-                               card_header(
-                                 div(
-                                   style = "display: flex; align-items: center; justify-content: space-between;",
-                                   "View as: ",
-                                   selectInput(
-                                     inputId = "agg_level_ttl",
-                                     label = NULL,
-                                     choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                                     selected = "Monthly"
-                                   )
-                                 ),
-                               ),
-                               plotlyOutput("trend_plot_total"),
-                             )
-             )
-    ),
-    tabPanel("12-Month Forecast",
-             layout_columns( width = 12,
-                             card(
-                               height = c(280),
-                               card_header(
-                                 div(
-                                 ),
-                               ),
-                               plotlyOutput("forecast_plot_total"),
-                             )
-             )
-    ),
-    tabPanel(Next_FC_Text,
-      fluidRow(
-             column(
-               width = 3,
-               radioButtons(
-                 "chart_mode",
-                 "",
-                 choices = c("Cumulative", "Daily"),
-                 selected = "Cumulative",
-                 inline = TRUE
-               )
-             ),
-             column(width = 3, uiOutput("kpi_full")),
-             column(width = 3, uiOutput("kpi_mtd")),
-             column(width = 3, uiOutput("kpi_progress")),
+  div(
+    style = "padding-right: 0px;",
+    
+    tabsetPanel(
+      id = "toptabs",
+      
+      tabPanel("TIV",
+        layout_columns( width = 12,
+          card(
+            height = c(280),
+            card_header(
+              div(
+                style = "display: flex; align-items: center; justify-content: space-between;",
+                "View as: ",
+                selectInput(
+                  inputId = "agg_level_ttl",
+                  label = NULL,
+                  choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                  selected = "Monthly"
+                )
+              ),
+            ),
+            plotlyOutput("trend_plot_total"),
+          )
+        )
       ),
-             layout_columns( width = 12,
-                             card(
-                               height = c(280),
-                               card_header(
-                                 div(),
-                               ),
-                               plotlyOutput("forecast_plot_nextmonth")
-                             )
-             )
+      tabPanel("12-Month Forecast",
+        layout_columns( width = 12,
+          card(
+            height = c(280),
+            card_header(
+              div(),
+            ),
+            plotlyOutput("forecast_plot_total_segment"),
+          )
+        )
+      ),
+      tabPanel(Next_FC_Text,
+        fluidRow(
+          column(
+            width = 3,
+            radioButtons(
+              "chart_mode",
+              "",
+              choices = c("Cumulative", "Daily"),
+              selected = "Cumulative",
+              inline = TRUE
+            )
+          ),
+          column(width = 3, uiOutput("kpi_full")),
+          column(width = 3, uiOutput("kpi_mtd")),
+          column(width = 3, uiOutput("kpi_progress")),
+        ),
+        layout_columns( width = 12,
+          card(
+            height = c(280),
+            card_header(
+              div(),
+            ),
+            plotlyOutput("forecast_plot_nextmonth_segment")
+          )
+        )
+      ),
+      tabPanel("Forecast Track Record",
+        layout_columns( width = 12,
+          card(
+            height = c(540),
+            
+            tags$details(
+              class = "forecast-note",
+              
+              tags$summary(
+                HTML("&#9432; How is this calculated?")
+              ),
+              
+              tags$p(
+                "The M+1 forecast is generated using a Prophet-based time-series model incorporating ",
+                "monthly and yearly seasonality and calendar effects ",
+                "(e.g. public holidays, festive seasons, as well as COVID lockdown). ",
+                "Historical forecasts are generated using only information available at the ",
+                "respective forecast cutoff. The track record indicates",
+                "the TIV's historical trend and does not guarantee future forecast accuracy."
+              )
+            ),
+            
+            DTOutput("validated_results"),
+          )
+        )
+      )
     )
   ),
   
@@ -185,7 +461,15 @@ ui <- page_fluid(
              selected = "2026"
            )
     ),
-    column(width = 3,
+    column(width = 1,
+           selectInput(
+             inputId = "month_selected",
+             label = "Month:",
+             choices = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"),
+             selected = latest_month
+           )
+    ),
+    column(width = 2,
            selectInput(
              inputId = "state_selected",
              label = "State*:",
@@ -222,133 +506,133 @@ ui <- page_fluid(
       tabsetPanel(
         id = "tabs",
         tabPanel("By Make",
-                 layout_columns(
-                   card(
-                     height = c(740),
-                     card_header(
-                       div(
-                         style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
-                         div("Vehicle Registration Summary by Make", style = "font-weight: 600;")
-                       )
-                     ),
-                     DTOutput("summary_table")
-                   ),
-                   card(
-                     height = c(740),
-                     card_header(
-                       div(
-                         style = "display: flex; align-items: center; justify-content: space-between;",
-                         "View as: ",
-                         selectInput(
-                           inputId = "agg_level",
-                           label = NULL,
-                           choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                           selected = "Monthly"
-                         )
-                       ) 
-                     ),
-                     plotlyOutput("trend_plot_make")
-                   ),
-                   col_widths = c(6, 6)
-                 )
+          layout_columns(
+            card(
+              height = c(740),
+              card_header(
+                div(
+                  style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
+                  div("Vehicle Registration Summary by Make", style = "font-weight: 600;")
+                )
+              ),
+              DTOutput("summary_table")
+            ),
+            card(
+              height = c(740),
+              card_header(
+                div(
+                  style = "display: flex; align-items: center; justify-content: space-between;",
+                  "View as: ",
+                  selectInput(
+                    inputId = "agg_level",
+                    label = NULL,
+                    choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                    selected = "Monthly"
+                  )
+                ) 
+              ),
+              plotlyOutput("trend_plot_make")
+            ),
+            col_widths = c(6, 6)
+          )
         ),
         tabPanel("By Model",
-                 layout_columns(
-                   width = 12,
-                   card(
-                     height = c(740),
-                     card_header(
-                       div(
-                         style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
-                         div("Vehicle Registration Summary by Model", style = "font-weight: 600;"),
-                       )
-                     ),
-                     DTOutput("summary_table_model")
-                   ),     
-                   card(
-                     height = c(740),
-                     card_header(
-                       div(
-                         style = "display: flex; align-items: center; justify-content: space-between;",
-                         "View as: ",
-                         selectInput(
-                           inputId = "agg_level_model",
-                           label = NULL,
-                           choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                           selected = "Monthly"
-                         )
-                       ) 
-                     ),
-                     plotlyOutput("trend_plot_model")
-                   ),
-                   col_widths = c(6, 6)
-                 )
+          layout_columns(
+            width = 12,
+            card(
+              height = c(740),
+              card_header(
+                div(
+                  style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
+                  div("Vehicle Registration Summary by Model", style = "font-weight: 600;"),
+                )
+              ),
+              DTOutput("summary_table_model")
+            ),     
+            card(
+              height = c(740),
+              card_header(
+                div(
+                  style = "display: flex; align-items: center; justify-content: space-between;",
+                  "View as: ",
+                  selectInput(
+                    inputId = "agg_level_model",
+                    label = NULL,
+                    choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                    selected = "Monthly"
+                  )
+                ) 
+              ),
+              plotlyOutput("trend_plot_model")
+            ),
+            col_widths = c(6, 6)
+          )
         ),
         tabPanel("By Fuel Type",
-                 layout_columns(
-                   width = 12,
-                   card(
-                     height = c(740),
-                     card_header(
-                       div(
-                         style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
-                         div("Vehicle Registration Summary by Fuel Type", style = "font-weight: 600;"),
-                       )
-                     ),
-                     DTOutput("summary_table_fuel")
-                   ),
-                   card(
-                     height = c(740),
-                     card_header(
-                       div(
-                         style = "display: flex; align-items: center; justify-content: space-between;",
-                         "View as: ",
-                         selectInput(
-                           inputId = "agg_level_fuel",
-                           label = NULL,
-                           choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
-                           selected = "Monthly"
-                         )
-                       ) 
-                     ),
-                     plotlyOutput("trend_plot_fuel")
-                   ),
-                   col_widths = c(6, 6)
-                 )
+          layout_columns(
+            width = 12,
+            card(
+              height = c(740),
+              card_header(
+                div(
+                  style = "display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 20px;",
+                  div("Vehicle Registration Summary by Fuel Type", style = "font-weight: 600;"),
+                )
+              ),
+              DTOutput("summary_table_fuel")
+            ),
+            card(
+              height = c(740),
+              card_header(
+                div(
+                  style = "display: flex; align-items: center; justify-content: space-between;",
+                  "View as: ",
+                  selectInput(
+                    inputId = "agg_level_fuel",
+                    label = NULL,
+                    choices = c("Monthly", "Quarterly", "Annually", "5-Month Average"),
+                    selected = "Monthly"
+                  )
+                ) 
+              ),
+              plotlyOutput("trend_plot_fuel")
+            ),
+            col_widths = c(6, 6)
+          )
         ),
         tabPanel("By Make (Full Year)",
-                 layout_columns(
-                   col_widths =  c(12),
-                   card(
-                     height = c(740),
-                     card_header("Monthly Vehicle Registrations by Make"),
-                     DTOutput("annual_table")
-                   ),
-                   card(
-                     height = c(240),
-                     card_header("Monthly Vehicle Registrations Total"),
-                     DTOutput("annual_table_tiv")
-                   )
-                 )
+          layout_columns(
+            col_widths =  c(12),
+            card(
+              height = c(740),
+              card_header("Monthly Vehicle Registrations by Make"),
+              DTOutput("annual_table")
+            ),
+            card(
+              height = c(240),
+              card_header("Monthly Vehicle Registrations Total"),
+              DTOutput("annual_table_tiv")
+            )
+          )
         ),
         tabPanel("By Model (Full Year)",
-                 layout_columns(
-                   col_widths =  c(12),
-                   card(
-                     height = c(740),
-                     card_header("Monthly Vehicle Registrations by Model"),
-                     DTOutput("annual_table_model")
-                   ),
-                   card(
-                     height = c(240),
-                     card_header("Monthly Vehicle Registrations Total"),
-                     DTOutput("annual_table_model_tiv")
-                   )
-                 )
+          layout_columns(
+            col_widths =  c(12),
+            card(
+              height = c(740),
+              card_header("Monthly Vehicle Registrations by Model"),
+              DTOutput("annual_table_model")
+            ),
+            card(
+              height = c(240),
+              card_header("Monthly Vehicle Registrations Total"),
+              DTOutput("annual_table_model_tiv")
+            )
+          )
         )
       )
-      )
-    ),
+    )
+  ),
 
   actionButton("reset_selection", "Reset Selection"),
   
@@ -363,7 +647,14 @@ server <- function(input, output, session) {
   
   # ---- Get MTD Progress Values (KPI) ----
   kpi_values <- reactive({
-    df <- forecast_nextmonth
+    
+    if (input$vehicle_segment_fc != "All"){
+      segment_name <- tolower(gsub("[^A-Za-z0-9]", "", input$vehicle_segment_fc))
+      
+      df <- forecast_segments[[segment_name]]$nextmonth
+    } else {
+      df <- forecast_nextmonth
+    } 
     
     today <- Sys.Date()
     
@@ -393,7 +684,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # ---- Filter by Fuel Type, Segment, & Latest Year ----
+  # ---- Filter by Fuel Type, Segment, & Latest Year & Latest Month ----
   filtered_data <- reactive({
     df <- car_data
     if (input$global_fuel_type != "All") {
@@ -418,7 +709,53 @@ server <- function(input, output, session) {
                                              as.numeric(input$year_selected) - 2,
                                              as.numeric(input$year_selected) - 3,
                                              as.numeric(input$year_selected) - 4))
+    
+    latest_year <- max(year(df$date_reg))
+    
+    df <- df |> filter(
+      year(date_reg) < latest_year | 
+      (year(date_reg) == latest_year & month(date_reg) <= as.numeric(input$month_selected))
+    )
   })
+  
+  # ---- Filter Forecast Data by Segment ----
+
+  # prepare forecast_monthly for each segment here
+  forecast_next12_segment <- reactive({
+    if (input$vehicle_segment_fc != "All"){
+      segment_name <- tolower(gsub("[^A-Za-z0-9]", "", input$vehicle_segment_fc))
+      
+      df <- forecast_segments[[segment_name]]$next12
+    } else {
+      df <- forecast_next12
+    }
+  })
+  
+  tiv_monthly_l12m_segment <- reactive({
+    if (input$vehicle_segment_fc != "All"){
+      df <- car_data |>
+        filter(segment == input$vehicle_segment_fc) |>
+        group_by(date_reg = floor_date(date_reg, "month")) |>
+        summarise(TIV = sum(count, na.rm = TRUE)) |>
+        arrange(date_reg)
+      
+      df <- df |> 
+        filter(date_reg >= month_current %m-% months(11)) 
+    } else {
+      df <- tiv_monthly_l12m
+    }
+  })  
+  
+  forecast_nextmonth_segment <- reactive({
+    if (input$vehicle_segment_fc != "All"){
+      segment_name <- tolower(gsub("[^A-Za-z0-9]", "", input$vehicle_segment_fc))
+      
+      df <- forecast_segments[[segment_name]]$nextmonth
+    } else {
+      df <- forecast_nextmonth
+    }
+  })
+
   
   # ---- Get unique make models ----
   model_list <- reactive({
@@ -1062,6 +1399,62 @@ server <- function(input, output, session) {
       formatStyle("Growth (YTD)", color = styleInterval(c(0), c('red', 'green')))
   }
   
+  validated_results_render <- function(df) {
+    df <- df()
+    
+    # which columns are numbers but NOT the growth % columns
+    pct_cols <- c("% Error")
+    num_cols <- c("Forecast TIV", "Actual TIV")
+    
+    datatable(df,
+              escape = FALSE,
+              rownames = FALSE,
+              selection = 'none',
+              options = list(
+                autoWidth = FALSE,
+                columnDefs = list(
+                  
+                  # Width for all columns
+                  list(
+                    width = paste0(round(100 / ncol(df), 2), "%"),
+                    targets = "_all"
+                  ),
+                  
+                  # Renderer only for remarks
+                  list(
+                    targets = which(names(df) == "Remarks") - 1,
+                    render = JS(
+                      "function(data, type, row, meta) {",
+                      "  if (type === 'display' && data) {",
+                      "    return '<span title=\"' + data.replace(/\"/g, '&quot;') + '\">ⓘ</span>';",
+                      "  }",
+                      "  return data;",
+                      "}"
+                    )
+                  )
+                ),
+                dom = 't', ordering = FALSE
+              ),
+              class = 'cell-border stripe') |>
+      formatRound(columns = num_cols, digits = 0, mark = ",") |>
+      formatPercentage(columns = pct_cols, 1) |>
+      formatStyle(
+        columns = pct_cols,
+        backgroundColor = styleInterval(
+          c(-0.20, -0.10, -0.05, 0.05, 0.10, 0.20),
+          c(
+            "#f5b7b1",
+            "#f8d7da",
+            "#fdecea",
+            "white",
+            "#fdecea",
+            "#f8d7da",
+            "#f5b7b1"
+          )
+        )
+      )
+  }
+  
   # input$share_toggle
   
   data_table <- function(df) {
@@ -1280,6 +1673,14 @@ server <- function(input, output, session) {
   })
   
   # ---- Output Plotly Function ----
+  monthly_trends_data_ttl_segment <- reactive({
+    if (input$vehicle_segment_fc != "All") {
+      df <- car_data |> filter(segment == input$vehicle_segment_fc)
+    } else {
+      df <- car_data
+    }
+  })
+  
   plot_chart_total <- function(agg_choice) {
     
     if (nrow(car_data) == 0) {
@@ -1289,7 +1690,7 @@ server <- function(input, output, session) {
       )
     }
     
-    monthly_trends_data_ttl <- car_data |>
+    monthly_trends_data_ttl <- monthly_trends_data_ttl_segment() |>
       mutate(month = date_reg) |>
       group_by(month) |>
       summarise(registration = sum(count), .groups = "drop")
@@ -1438,20 +1839,58 @@ server <- function(input, output, session) {
       add_ribbons( 
         data = forecast_next12,
         x = ~date_reg, ymin = ~yhat_lower, ymax = ~yhat_upper,
-        name = "95% CI",
+        name = "90% CI",
         fillcolor = 'rgba(255,165,0,0.2)', 
         line = list(color = 'transparent'),
-        hovertemplate = "95% CI: %{y:.3~s}<extra></extra>"
+        hovertemplate = "90% CI: %{y:.3~s}<extra></extra>"
       ) |>
       add_lines( 
         data = forecast_next12,
         x = ~date_reg, y = ~yhat_lower,
-        name = "95% CI",
+        name = "90% CI",
         line = list(color = "rgba(255,165,0,0.2)", width = 0), 
-        hovertemplate = "95% CI: %{y:.3~s}<extra></extra>"
+        hovertemplate = "90% CI: %{y:.3~s}<extra></extra>"
       ) |>
       layout(
         title = "TIV with 12-Month Forecast",
+        xaxis = list(title = "Month"),
+        yaxis = list(title = "Registration"),
+        hovermode = "x"
+      )
+  }
+  plot_chart_fc_total_segment <- function() {
+    plot_ly() |>
+      add_lines(
+        data = tiv_monthly_l12m_segment(), # use the last 12 months only for the plot
+        x = ~date_reg, y = ~TIV,
+        name = "Actual",
+        line = list(color = "black"),
+        hovertemplate = "Actual: %{y:.3~s}<extra></extra>"
+      ) |>
+      add_lines(
+        data = forecast_next12_segment(),
+        x = ~date_reg, y = ~TIV,
+        name = "Forecast",
+        line = list(color = "orange", dash = "dot"),
+        hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
+      ) |>
+      add_ribbons( 
+        data = forecast_next12_segment(),
+        x = ~date_reg, ymin = ~yhat_lower, ymax = ~yhat_upper,
+        name = "90% CI",
+        fillcolor = 'rgba(255,165,0,0.2)', 
+        line = list(color = 'transparent'),
+        hovertemplate = "90% CI: %{y:.3~s}<extra></extra>"
+      ) |>
+      add_lines( 
+        data = forecast_next12_segment(),
+        x = ~date_reg, y = ~yhat_lower,
+        name = "90% CI",
+        line = list(color = "rgba(255,165,0,0.2)", width = 0), 
+        hovertemplate = "90% CI: %{y:.3~s}<extra></extra>"
+      ) |>
+      layout(
+        title = "TIV-Segment with 12-Month Forecast",
         xaxis = list(title = "Month"),
         yaxis = list(title = "Registration"),
         hovermode = "x"
@@ -1493,8 +1932,50 @@ server <- function(input, output, session) {
         )
     }
   }
+  plot_chart_fc_nextmonth_segment <- function() {
+    df <- forecast_nextmonth_segment()
+    
+    if (input$chart_mode == "Daily") {
+      plot_ly() |>
+        add_bars(
+          data = df,
+          x = ~date_reg, y = ~TIV,
+          name = "Forecast",
+          marker = list(color = "orange"),
+          hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
+        ) |>
+        layout(
+          title = "TIV with Daily Forecast",
+          xaxis = list(title = "Day"),
+          yaxis = list(title = "Registration"),
+          hovermode = "x"
+        )
+    } else {
+      plot_ly() |>
+        add_lines(
+          data = df,
+          x = ~date_reg, y = ~TIV_Cum,
+          name = "Forecast",
+          line = list(color = "orange", dash = "dot"),
+          hovertemplate = "Forecast: %{y:.3~s}<extra></extra>"
+        ) |>
+        layout(
+          title = "TIV with Daily Forecast",
+          xaxis = list(title = "Day"),
+          yaxis = list(title = "Registration"),
+          hovermode = "x"
+        )
+    }
+  }
   # ---- Reactive summary total ----
   summary_total <- reactive({
+    if (input$vehicle_segment_fc != "All"){
+      car_data <- car_data |>
+        filter(segment == input$vehicle_segment_fc)
+    } else {
+      car_data <- car_data
+    }
+    
     month_current_count_ttl <- car_data |>
       filter(date_reg == latest_date) |>
       summarise(count_current = sum(count), .groups = "drop")
@@ -1557,8 +2038,31 @@ server <- function(input, output, session) {
   annual_data_tiv       <- reactive(make_annual_tiv(car_data, "no"))
   annual_data_tiv_model <- reactive(make_annual_tiv(car_data, "yes"))
   
+  # ---- Reactive validated_results ----
+  validated_results_reactive <- reactive({
+      if (input$vehicle_segment_fc != "All"){
+        df <- validated_results |>
+          filter(segment == input$vehicle_segment_fc)
+      } else {
+        df <- validated_results
+      }
+    
+    df <- df |>
+      select(-segment, -year, -month) |>
+      rename(
+        `Forecast Month` := forecast_month,
+        `Forecast TIV` := TIV_FC,
+        `Actual TIV` := TIV_ACTUAL,
+        `% Error` := pct_error,
+        `Remarks` := remarks
+      )
+    
+    return(df)
+  })
+  
   # ---- Output 1: DataTable ----
   output$summary_table_total    <- renderDT(data_table_TIV(summary_total))
+  output$validated_results      <- renderDT(validated_results_render(validated_results_reactive))
   
   # Version that doesn't show error if there's no data when filtered (but creates a new error lol)
   safe_renderDT <- function(data_reactive, table_fun, msg = "No data available for the selected filters") {
@@ -1579,12 +2083,14 @@ server <- function(input, output, session) {
   output$annual_table_model_tiv   <- safe_renderDT(annual_data_tiv_model, data_table_annual_tiv)
   
   # ---- Output 2: Plotly Trend ----
-  output$trend_plot_total       <- renderPlotly(plot_chart_total(input$agg_level_ttl))
-  output$trend_plot_make        <- renderPlotly(plot_chart(summary_data, maker, "Make", input$agg_level))
-  output$trend_plot_model       <- renderPlotly(plot_chart(summary_data_model, model, "Model", input$agg_level_model))
-  output$trend_plot_fuel        <- renderPlotly(plot_chart(summary_data_fuel, fuel_grouped, "Fuel Type", input$agg_level_fuel))
-  output$forecast_plot_total    <- renderPlotly(plot_chart_fc_total())
-  output$forecast_plot_nextmonth<- renderPlotly(plot_chart_fc_nextmonth())
+  output$trend_plot_total         <- renderPlotly(plot_chart_total(input$agg_level_ttl))
+  output$trend_plot_make          <- renderPlotly(plot_chart(summary_data, maker, "Make", input$agg_level))
+  output$trend_plot_model         <- renderPlotly(plot_chart(summary_data_model, model, "Model", input$agg_level_model))
+  output$trend_plot_fuel          <- renderPlotly(plot_chart(summary_data_fuel, fuel_grouped, "Fuel Type", input$agg_level_fuel))
+  output$forecast_plot_total      <- renderPlotly(plot_chart_fc_total())
+  output$forecast_plot_nextmonth  <- renderPlotly(plot_chart_fc_nextmonth())
+  output$forecast_plot_total_segment       <- renderPlotly(plot_chart_fc_total_segment())
+  output$forecast_plot_nextmonth_segment   <- renderPlotly(plot_chart_fc_nextmonth_segment())
   
   # ---- Output 3: Cards ----
   output$kpi_full <- renderUI({
@@ -1611,7 +2117,14 @@ server <- function(input, output, session) {
       text-align:center;
       box-shadow:0 1px 3px rgba(0,0,0,0.1);
       ",
-      div(style="font-size:12px; color:#666;", "MTD Forecast"),
+      div(
+        style = "font-size:12px; color:#666;", 
+        paste0(
+          "MTD Forecast (as of ",
+          format(mtd_date, "%d %b"),
+          ")"
+        )
+      ),
       div(style="font-size:22px; font-weight:bold;", scales::comma(vals$fc_mtd))
     )
   })
@@ -1645,30 +2158,3 @@ server <- function(input, output, session) {
 } # END OF SERVER
 
 shinyApp(ui, server)
-
-
-# OLD Forecasting Model (SARIMA)
-
-# ---- Forecasting ----
-# 
-# # convert to time series object
-# tiv_ts <- ts(tiv_monthly$TIV, start = c(2010, 1), frequency = 12)
-# 
-# # auto.arima to select the best seasonal ARIMA
-# fit <- auto.arima(tiv_ts, seasonal = TRUE, stepwise = FALSE, approximation = FALSE)
-# summary(fit)
-# 
-# # forecast the upcoming 12 months and bind back to the original monthly tiv data
-# forecast_12 <- forecast(fit, h = 12, level = c(70, 95))
-# 
-# # convert to dataframe
-# forecast_df <- tibble(
-#   date_reg = seq(max(tiv_monthly$date_reg) %m+% months(1),
-#                  by = "1 month", length.out = 12),
-#   TIV = as.numeric(forecast_12$mean),
-#   lower_70 = as.numeric(forecast_12$lower[, 1]),
-#   upper_70 = as.numeric(forecast_12$upper[, 1]),
-#   lower_95 = as.numeric(forecast_12$lower[, 2]),
-#   upper_95 = as.numeric(forecast_12$upper[, 2]),
-#   type = "Forecast"
-# )

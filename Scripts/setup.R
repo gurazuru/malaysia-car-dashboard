@@ -17,6 +17,13 @@ car_data_list <- map(years, ~ read_csv(
 # Combine all years into one data frame
 car_data_full <- bind_rows(car_data_list)
 
+# Save a backup copy of the master data eacha month
+refresh_date <- Sys.Date()
+write_csv(
+  car_data_full,
+  paste0("Data/Raw/car_data_", refresh_date, ".csv")
+)
+
 # Makes all dates to use 1st day of the month only.
 car_data_full <- car_data_full |>
   mutate(fuel_grouped = case_when(

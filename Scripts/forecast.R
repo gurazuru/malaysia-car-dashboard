@@ -18,6 +18,9 @@ cutoffs <- as.Date(c('2024-12-31',
 # M+1 to forecast:
 Next_FC_Year = 2026
 Next_FC_Month = 9
+
+# No. of days to forecast in cross validation step
+horizon = 31
 # --------------------------------------------------------------------------------------------------------
 
 # ---- Load Public Holidays Data ----
@@ -35,43 +38,43 @@ car_df <- readr::read_csv("Data/car_data_sum.csv") |>
   filter(year(ds) >= 2022)
 
 # ---- Model 1: Default - Yearly, Weekly seasonality. ----
-m1 <- prophet(car_df)
-
-future1 <- make_future_dataframe(m1, periods = 365)
-
-forecast1 <- predict(m1, future1)
-tail(forecast1[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-
-plot(m1, forecast1)
-prophet_plot_components(m1, forecast1)
+# m1 <- prophet(car_df)
+# 
+# future1 <- make_future_dataframe(m1, periods = 365)
+# 
+# forecast1 <- predict(m1, future1)
+# tail(forecast1[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# 
+# plot(m1, forecast1)
+# prophet_plot_components(m1, forecast1)
 
 # ---- Model 2: Add Monthly Seasonality - Yearly, Weekly, & Monthly seasonality. ----
-m2 <- prophet(car_df)
-m2 <- prophet(monthly.seasonality=TRUE)
-m2 <- add_seasonality(m2, name='monthly', period=30.5, fourier.order=5)
-m2 <- fit.prophet(m2, car_df)
-
-future2 <- make_future_dataframe(m2, periods = 365)
-
-forecast2 <- predict(m2, future2)
-tail(forecast2[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-
-plot(m2, forecast2)
-prophet_plot_components(m2, forecast2)
+# m2 <- prophet(car_df)
+# m2 <- prophet(monthly.seasonality=TRUE)
+# m2 <- add_seasonality(m2, name='monthly', period=30.5, fourier.order=5)
+# m2 <- fit.prophet(m2, car_df)
+# 
+# future2 <- make_future_dataframe(m2, periods = 365)
+# 
+# forecast2 <- predict(m2, future2)
+# tail(forecast2[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# 
+# plot(m2, forecast2)
+# prophet_plot_components(m2, forecast2)
 
 # ---- Model 3: Add Public Holidays - Yearly, Weekly, Monthly, & Public Holiday seasonality. ----
-m3 <- prophet(car_df)
-m3 <- prophet(monthly.seasonality=TRUE, holidays = PH_data)
-m3 <- add_seasonality(m3, name='monthly', period=30.5, fourier.order=5)
-m3 <- fit.prophet(m3, car_df)
-
-future3 <- make_future_dataframe(m3, periods = 365)
-
-forecast3 <- predict(m3, future3)
-tail(forecast3[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-
-plot(m3, forecast3)
-prophet_plot_components(m3, forecast3)
+# m3 <- prophet(car_df)
+# m3 <- prophet(monthly.seasonality=TRUE, holidays = PH_data)
+# m3 <- add_seasonality(m3, name='monthly', period=30.5, fourier.order=5)
+# m3 <- fit.prophet(m3, car_df)
+# 
+# future3 <- make_future_dataframe(m3, periods = 365)
+# 
+# forecast3 <- predict(m3, future3)
+# tail(forecast3[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# 
+# plot(m3, forecast3)
+# prophet_plot_components(m3, forecast3)
 
 # ---- Model 4: Treat COVID Lockdown - Yearly, Weekly, Monthly, Public Holiday, & COVID Lockdown seasonality. ----
 MCO_lockdowns <- tibble(
@@ -84,18 +87,18 @@ MCO_lockdowns$upper_window <- as.numeric(MCO_lockdowns$ds_upper - MCO_lockdowns$
 
 holidays_MCO <- bind_rows(PH_data, MCO_lockdowns)
 
-m4 <- prophet(car_df)
-m4 <- prophet(monthly.seasonality=TRUE, holidays = holidays_MCO)
-m4 <- add_seasonality(m4, name='monthly', period=30.5, fourier.order=5)
-m4 <- fit.prophet(m4, car_df)
-
-future4 <- make_future_dataframe(m4, periods = 365)
-
-forecast4 <- predict(m4, future4)
-tail(forecast4[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-
-plot(m4, forecast4)
-prophet_plot_components(m4, forecast4)
+# m4 <- prophet(car_df)
+# m4 <- prophet(monthly.seasonality=TRUE, holidays = holidays_MCO)
+# m4 <- add_seasonality(m4, name='monthly', period=30.5, fourier.order=5)
+# m4 <- fit.prophet(m4, car_df)
+# 
+# future4 <- make_future_dataframe(m4, periods = 365)
+# 
+# forecast4 <- predict(m4, future4)
+# tail(forecast4[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# 
+# plot(m4, forecast4)
+# prophet_plot_components(m4, forecast4)
 
 # ---- Model 5: Month Closing Effect - Yearly, Weekly, Monthly, Public Holiday, COVID Lockdown seasonality, & Month Closing Effect.  ----
 df5 <- car_df |>
@@ -130,11 +133,11 @@ future5 <- future5 |>
     is_first_day        = day(ds) == 1
   )
 
-forecast5 <- predict(m5, future5)
-tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-
-plot(m5, forecast5)
-prophet_plot_components(m5, forecast5)
+# forecast5 <- predict(m5, future5)
+# tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# 
+# plot(m5, forecast5)
+# prophet_plot_components(m5, forecast5)
 
 # ---- Model 6: Log Transform for Non-Negativity ----
 df6_lt <- df5
@@ -172,7 +175,6 @@ df7 <- car_df |>
     is_first_day        = day(ds) == 1
   )
 
-m7 <- prophet()
 m7 <- prophet(monthly.seasonality=20, holidays = holidays_MCO)
 m7 <- add_seasonality(m7, name='monthly', period=30.5, fourier.order=10) # fourier order 10
 m7 <- add_regressor(m7, 'is_final_week')
@@ -195,7 +197,7 @@ future7 <- future7 |>
   )
 
 forecast7 <- predict(m7, future7)
-tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+tail(forecast7[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 
 plot(m7, forecast7)
 prophet_plot_components(m7, forecast7)
@@ -204,48 +206,48 @@ prophet_plot_components(m7, forecast7)
 saveRDS(m7, "Data/prophet_model_m7.rds")
 
 # ---- Model 8: Capped Growth ----
-cap_m8 = 2500 # set daily carrying capacity
-
-df8 <- car_df |>
-  mutate(
-    is_final_week       = day(ds) > (days_in_month(ds) - 5),
-    is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
-    is_final_day        = day(ds) == days_in_month(ds),
-    is_first_week       = day(ds) <= 7 & day(ds) >= 3,
-    is_first_2days      = day(ds) == 2,
-    is_first_day        = day(ds) == 1,
-    
-    cap = cap_m8 # recall daily carrying capacity
-  )
-
-m8 <- prophet()
-m8 <- prophet(monthly.seasonality = 20, holidays = holidays_MCO, growth = 'logistic') #  logistic growth
-m8 <- add_seasonality(m8, name = 'monthly', period = 30.5, fourier.order = 10) # fourier order 10
-m8 <- add_regressor(m8, 'is_final_week')
-m8 <- add_regressor(m8, 'is_final_2ld')
-m8 <- add_regressor(m8, 'is_final_day')
-m8 <- add_regressor(m8, 'is_first_week')
-m8 <- add_regressor(m8, 'is_first_2days')
-m8 <- add_regressor(m8, 'is_first_day')
-m8 <- fit.prophet(m8, df8)
-
-future8 <- make_future_dataframe(m8, periods = 365)
-future8$cap <- cap_m8 # recall daily carrying capacity
-future8 <- future8 |>
-  mutate(
-    is_final_week       = day(ds) > (days_in_month(ds) - 5),
-    is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
-    is_final_day        = day(ds) == days_in_month(ds),
-    is_first_week       = day(ds) <= 7,
-    is_first_2days      = day(ds) == 2,
-    is_first_day        = day(ds) == 1
-  )
-
-forecast8 <- predict(m8, future8)
-tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-
-plot(m8, forecast8)
-prophet_plot_components(m8, forecast8)
+# cap_m8 = 2500 # set daily carrying capacity
+# 
+# df8 <- car_df |>
+#   mutate(
+#     is_final_week       = day(ds) > (days_in_month(ds) - 5),
+#     is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
+#     is_final_day        = day(ds) == days_in_month(ds),
+#     is_first_week       = day(ds) <= 7 & day(ds) >= 3,
+#     is_first_2days      = day(ds) == 2,
+#     is_first_day        = day(ds) == 1,
+#     
+#     cap = cap_m8 # recall daily carrying capacity
+#   )
+# 
+# m8 <- prophet()
+# m8 <- prophet(monthly.seasonality = 20, holidays = holidays_MCO, growth = 'logistic') #  logistic growth
+# m8 <- add_seasonality(m8, name = 'monthly', period = 30.5, fourier.order = 10) # fourier order 10
+# m8 <- add_regressor(m8, 'is_final_week')
+# m8 <- add_regressor(m8, 'is_final_2ld')
+# m8 <- add_regressor(m8, 'is_final_day')
+# m8 <- add_regressor(m8, 'is_first_week')
+# m8 <- add_regressor(m8, 'is_first_2days')
+# m8 <- add_regressor(m8, 'is_first_day')
+# m8 <- fit.prophet(m8, df8)
+# 
+# future8 <- make_future_dataframe(m8, periods = 365)
+# future8$cap <- cap_m8 # recall daily carrying capacity
+# future8 <- future8 |>
+#   mutate(
+#     is_final_week       = day(ds) > (days_in_month(ds) - 5),
+#     is_final_2ld        = day(ds) == (days_in_month(ds) - 1),
+#     is_final_day        = day(ds) == days_in_month(ds),
+#     is_first_week       = day(ds) <= 7,
+#     is_first_2days      = day(ds) == 2,
+#     is_first_day        = day(ds) == 1
+#   )
+# 
+# forecast8 <- predict(m8, future8)
+# tail(forecast5[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# 
+# plot(m8, forecast8)
+# prophet_plot_components(m8, forecast8)
 
 # Plot trimmed (plus minus 365 days)
 last_date  <- max(car_df$ds)
@@ -261,70 +263,68 @@ plot(m_trimmed, forecast_trimmed)
 
 
 # ---- Model Validation (horizon must be equal to number of days in the m+1 forecasted month)
-dfcv1 <- cross_validation(m1, cutoffs = cutoffs, horizon = 30, units = 'days')
-dfp1 <- performance_metrics(dfcv1)
-    
-dfcv2 <- cross_validation(m2, cutoffs = cutoffs, horizon = 30, units = 'days')
-dfp2 <- performance_metrics(dfcv2)
+# dfcv1 <- cross_validation(m1, cutoffs = cutoffs, horizon = horizon, units = 'days')
+# dfp1 <- performance_metrics(dfcv1)
+#     
+# dfcv2 <- cross_validation(m2, cutoffs = cutoffs, horizon = horizon, units = 'days')
+# dfp2 <- performance_metrics(dfcv2)
+# 
+# dfcv3 <- cross_validation(m3, cutoffs = cutoffs, horizon = horizon, units = 'days')
+# dfp3 <- performance_metrics(dfcv3)
+# 
+# dfcv4 <- cross_validation(m4, cutoffs = cutoffs, horizon = horizon, units = 'days')
+# dfp4 <- performance_metrics(dfcv4)
+# 
+# dfcv5 <- cross_validation(m5, cutoffs = cutoffs, horizon = horizon, units = 'days')
+# dfp5 <- performance_metrics(dfcv5)
 
-dfcv3 <- cross_validation(m3, cutoffs = cutoffs, horizon = 30, units = 'days')
-dfp3 <- performance_metrics(dfcv3)
-
-dfcv4 <- cross_validation(m4, cutoffs = cutoffs, horizon = 30, units = 'days')
-dfp4 <- performance_metrics(dfcv4)
-
-dfcv5 <- cross_validation(m5, cutoffs = cutoffs, horizon = 30, units = 'days')
-dfp5 <- performance_metrics(dfcv5)
-
-dfcv6 <- cross_validation(m6, cutoffs = cutoffs, horizon = 30, units = 'days')
+dfcv6 <- cross_validation(m6, cutoffs = cutoffs, horizon = horizon, units = 'days')
 dfcv6$y <- expm1(dfcv6$y)
 dfcv6$yhat <- expm1(dfcv6$yhat)
 dfcv6$yhat_lower <- expm1(dfcv6$yhat_lower)
 dfcv6$yhat_upper <- expm1(dfcv6$yhat_upper)
 dfp6 <- performance_metrics(dfcv6)
 
-dfcv7 <- cross_validation(m7, cutoffs = cutoffs, horizon = 30, units = 'days')
+dfcv7 <- cross_validation(m7, cutoffs = cutoffs, horizon = horizon, units = 'days')
 dfp7 <- performance_metrics(dfcv7)
 
-dfcv8 <- cross_validation(m8, cutoffs = cutoffs, horizon = 30, units = 'days')
-dfp8 <- performance_metrics(dfcv8)
-write_csv(forecast8, "Forecasts/m8_results.csv")
-write_csv(dfcv8, "Forecasts/m8_crossvalid.csv")
+# dfcv8 <- cross_validation(m8, cutoffs = cutoffs, horizon = horizon, units = 'days')
+# dfp8 <- performance_metrics(dfcv8)
+# write_csv(forecast8, "Forecasts/m8_results.csv")
+# write_csv(dfcv8, "Forecasts/m8_crossvalid.csv")
 
 # --- write the files to the folder ---
-write_csv(forecast1, "Forecasts/m1_results.csv")
-write_csv(forecast2, "Forecasts/m2_results.csv")
-write_csv(forecast3, "Forecasts/m3_results.csv")
-write_csv(forecast4, "Forecasts/m4_results.csv")
-write_csv(forecast5, "Forecasts/m5_results.csv")
+# write_csv(forecast1, "Forecasts/m1_results.csv")
+# write_csv(forecast2, "Forecasts/m2_results.csv")
+# write_csv(forecast3, "Forecasts/m3_results.csv")
+# write_csv(forecast4, "Forecasts/m4_results.csv")
+# write_csv(forecast5, "Forecasts/m5_results.csv")
 write_csv(forecast6, "Forecasts/m6_results.csv")
 write_csv(forecast7, "Forecasts/m7_results.csv")
 
 
-write_csv(dfcv1, "Forecasts/m1_crossvalid.csv")
-write_csv(dfcv2, "Forecasts/m2_crossvalid.csv")
-write_csv(dfcv3, "Forecasts/m3_crossvalid.csv")
-write_csv(dfcv4, "Forecasts/m4_crossvalid.csv")
-write_csv(dfcv5, "Forecasts/m5_crossvalid.csv")
+# write_csv(dfcv1, "Forecasts/m1_crossvalid.csv")
+# write_csv(dfcv2, "Forecasts/m2_crossvalid.csv")
+# write_csv(dfcv3, "Forecasts/m3_crossvalid.csv")
+# write_csv(dfcv4, "Forecasts/m4_crossvalid.csv")
+# write_csv(dfcv5, "Forecasts/m5_crossvalid.csv")
 write_csv(dfcv6, "Forecasts/m6_crossvalid.csv")
 write_csv(dfcv7, "Forecasts/m7_crossvalid.csv")
 
 
 # Based on data validation steps, Model 7 has the lowest error against actual.
-# While Model 6 has the best monthly trend from 1st to 9th of the month
+# While Model 6 has the best monthly trend from 1st to 10th of the month
 
 # Prepare upcoming month's forecast including monthly trend
 forecast_sel1 <- forecast7 |>
   filter(year(ds) == Next_FC_Year & month(ds) == Next_FC_Month) |>
   select(ds, yhat, yhat_lower, yhat_upper) |>
-  rename(Date := 'ds', yhat1 := 'yhat', yhat1_lower := 'yhat_lower', yhat1_upper := 'yhat_upper') |>
-  mutate(yhat1 = case_when(yhat1 < 0 ~ 0, TRUE ~ yhat1))
+  rename(Date := 'ds', yhat1 := 'yhat', yhat1_lower := 'yhat_lower', yhat1_upper := 'yhat_upper') 
 
 forecast_sel2 <- forecast6 |> # for monthly trend, follows log model for the first 10 days of the month
   filter(year(ds) == Next_FC_Year & month(ds) == Next_FC_Month) |>
   select(ds, yhat, yhat_lower, yhat_upper) |>
-  rename(Date := 'ds', yhat2 := 'yhat', yhat2_lower := 'yhat_lower', yhat2_upper := 'yhat_upper') |>
-  mutate(yhat2 = case_when(yhat2 < 0 ~ 0, TRUE ~ yhat2))
+  rename(Date := 'ds', yhat2 := 'yhat', yhat2_lower := 'yhat_lower', yhat2_upper := 'yhat_upper') 
 
 yhat1_month = sum(forecast_sel1$yhat1)
 yhat2_month = sum(forecast_sel2$yhat2)
@@ -337,7 +337,7 @@ forecast_sel_comb <- forecast_sel1 |>
   left_join(forecast_sel2, by = c("Date")) |>
   mutate(yhat_adj = case_when(day(Date) <= 10 ~ yhat2, TRUE ~ yhat1 )) # note the 10th of the month being the separation here
 
-yhat_adj_month = sum(forecast_sel_comb$yhat_adj)  
+yhat_adj_month = sum(forecast_sel_comb$yhat_adj)  # get the total monthly TIV
 
 forecast_sel_comb <- forecast_sel_comb |>
   mutate(yhat1_month = yhat1_month,
@@ -345,8 +345,29 @@ forecast_sel_comb <- forecast_sel_comb |>
          yhat_adj_month = yhat_adj_month,
          yhat1_month2h = forecast_nextmonth_2h$yhat1_month2h) |>
   mutate(yhat_adj_add = case_when(day(Date) <= 10 ~ 0, TRUE ~ ((yhat1_month - yhat_adj_month) * (yhat_adj/yhat1_month2h)))) |>
-  mutate(yhat_adj_nodiff = yhat_adj + yhat_adj_add)
+  mutate(yhat_adj_nodiff = yhat_adj + yhat_adj_add) |>
+  mutate(yhat_neg = case_when(yhat_adj_nodiff < 0 ~ yhat_adj_nodiff, TRUE ~ 0))
 
+forecast_sel_month_negative <- sum(forecast_sel_comb$yhat_neg) # get total negative forecast to reconcile back on the first 20 days
+
+forecast_sel_comb <- forecast_sel_comb |>
+  # now remove the negative values by setting them to 0
+  mutate(yhat_adj_nodiff = case_when(yhat_adj_nodiff < 0 ~ 0, TRUE ~ yhat_adj_nodiff)) |>
+  
+  # Identify first 20 days
+  mutate(is_first_20_days = day(Date) <= 20) |>
+  
+  # Calculate total forecast within first 20 days
+  mutate(first_20_total = sum(yhat_adj_nodiff[is_first_20_days], na.rm = TRUE)) |>
+
+  # calculate the ratio of each day within the first 20 days
+  mutate(first_20_ratio = case_when(is_first_20_days & first_20_total > 0 ~ yhat_adj_nodiff / first_20_total,
+      TRUE ~ 0)) |>
+  
+  # calculate the new yhat with negative values redistributed
+  mutate(yhat_adj_nodiff = yhat_adj_nodiff + forecast_sel_month_negative * first_20_ratio) |>
+  ungroup()
+  
 yhat_adjnodiff_month = sum(forecast_sel_comb$yhat_adj_nodiff)
 
 # Prepare final data frame for dashboard
@@ -357,24 +378,24 @@ forecast_fd <- forecast_sel_comb |>
   mutate(Forecast_Cum = cumsum(Forecast))
 
 # Get standard deviation of the month's forecast for confidence interval calculation.
+# 1.645 -> 90%, 1.96 -> 95%
 forecast_monthly <- forecast7 |>
   select(ds, yhat, yhat_upper) |>
   mutate(
-    month = floor_date(ds, "month"),
-    sd_day = (yhat_upper - yhat) / 1.96
+    month = floor_date(ds, "month")
   ) |>
-  mutate(yhat = case_when(yhat < 0 ~ 0, TRUE ~ yhat))|>
+  # don't zeroize negative values to avoid overforecasting total monthly
+  # mutate(yhat = case_when(yhat < 0 ~ 0, TRUE ~ yhat)) |>
   group_by(month) |>
   summarise(
-    yhat = sum(yhat),
-    sd_month = sqrt(sum(sd_day^2)),
-    yhat_lower = yhat - 1.96 * sd_month,
-    yhat_upper = yhat + 1.96 * sd_month
+    yhat = sum(yhat)
   ) |>
-  mutate(yhat = round(yhat), yhat_lower = round(yhat_lower), yhat_upper = round(yhat_upper))
+  mutate(yhat = round(yhat))
 
-
-# --- save the files to the folder for app.R ---
+forecast7_2609 <- forecast7 |>
+  select(ds, yhat) |>
+  filter(year(ds) == 2026 & month(ds) == 9)
+  
+# ---- Save the files to the folder for app.R ----
 saveRDS(forecast_monthly, "Data/forecast_monthly.rds")
 saveRDS(forecast_fd, "Data/forecast_fd.rds")
-
