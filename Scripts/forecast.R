@@ -12,15 +12,15 @@ cutoffs <- as.Date(c('2024-12-31',
                      '2025-01-31', '2025-02-28', '2025-03-31', '2025-04-30', '2025-05-31', '2025-06-30', 
                      '2025-07-31', '2025-08-31', '2025-09-30', '2025-10-31', '2025-11-30', '2025-12-31', 
                      '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30',
-                     '2026-07-31'
+                     '2026-07-31', '2026-08-31'
 ))
 
 # M+1 to forecast:
 Next_FC_Year = 2026
-Next_FC_Month = 9
+Next_FC_Month = 10
 
 # No. of days to forecast in cross validation step
-horizon = 31
+horizon = 30
 # --------------------------------------------------------------------------------------------------------
 
 # ---- Load Public Holidays Data ----
@@ -254,7 +254,7 @@ last_date  <- max(car_df$ds)
 start_date <- last_date - 2450
 end_date   <- last_date + 365
 
-forecast_trimmed <- subset(forecast4, ds >= start_date & ds <= end_date)
+forecast_trimmed <- subset(forecast7, ds >= start_date & ds <= end_date)
 
 car_df_trimmed <- subset(car_df, ds >= start_date & ds <= end_date)
 m_trimmed <- prophet(car_df_trimmed)

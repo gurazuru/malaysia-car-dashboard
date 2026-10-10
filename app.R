@@ -12,9 +12,9 @@ library(scales)
 library(readODS)
 
 # setwd("C:/R Projects/JPJ_Car_Viz")
-data_asof = "Data as of 31st August 2026. Next update: 10th October 2026." # Update latest description here
-Next_FC_Text = "September 2026 Forecast"
-latest_month = "8" # 1 = January, 2 = February, etc.
+data_asof = "Data as of 30th September 2026. Next update: 10th November 2026." # Update latest description here
+Next_FC_Text = "October 2026 Forecast"
+latest_month = "9" # 1 = January, 2 = February, etc.
 
 # ---- Load and combine data ----
 car_data <- readr::read_csv("Data/car_data_sum.csv") |>
