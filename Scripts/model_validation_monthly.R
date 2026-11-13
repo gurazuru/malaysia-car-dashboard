@@ -11,7 +11,7 @@ setwd("C:/R Projects/JPJ_Car_Viz")
 # ---- Update this each month!! ----
 # M+1 to forecast:
 Next_FC_Year = 2026
-Next_FC_Month = 10
+Next_FC_Month = 11
 
 validation_car_data <- readr::read_csv("Data/car_data_sum.csv")
 latest_cutoff <- max(validation_car_data$date_reg) %m-% months(1)
@@ -37,7 +37,7 @@ cutoff_df <- tibble(
   select(cutoff, y_plus1, m_plus1)
 
 # No. of days to forecast in cross validation step
-horizon = 30
+horizon = 31
 
 # _________________________________________________________________________________________________
 

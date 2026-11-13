@@ -1,3 +1,8 @@
+# Monthly updates:
+# 1 - Cutoffs validation
+# 2 - M+1 to forecast
+# 3 - No. of days to forecast in cross validation step
+
 library(prophet)
 library(readxl)
 library(tidyverse)
@@ -12,15 +17,15 @@ cutoffs <- as.Date(c('2024-12-31',
                      '2025-01-31', '2025-02-28', '2025-03-31', '2025-04-30', '2025-05-31', '2025-06-30', 
                      '2025-07-31', '2025-08-31', '2025-09-30', '2025-10-31', '2025-11-30', '2025-12-31', 
                      '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30',
-                     '2026-07-31', '2026-08-31'
+                     '2026-07-31', '2026-08-31', '2026-09-30'
 ))
 
 # M+1 to forecast:
 Next_FC_Year = 2026
-Next_FC_Month = 10
+Next_FC_Month = 11
 
 # No. of days to forecast in cross validation step
-horizon = 30
+horizon = 31
 # --------------------------------------------------------------------------------------------------------
 
 # ---- Load Public Holidays Data ----
